@@ -418,7 +418,7 @@ function generate_starting_params_vec(
 		elseif n_starts > 1
 			# use latin hypercube for the multistart, with given estimation hyperparams
 			plan, _ = LHCoptim(param_length, n_starts, 100; rng = MersenneTwister(est_seed))
-			bounds_tuple = [(-2, 2) for _ in 1:param_length]
+			bounds_tuple = [(-2, 2) for _ in 1:n_starts]
 			mat = scaleLHC(plan, bounds_tuple)
 			starting_params_vec = [vec(mat[:, i]) for i in 1:n_starts]
 		end

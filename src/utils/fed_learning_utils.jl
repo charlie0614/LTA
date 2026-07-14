@@ -1,5 +1,6 @@
 # Optimisation
 using ForwardDiff
+include("../../digihero_params.jl")
 
 function grad_one_step(current_parameters, aggr_grad, sim_output::SimulationOutput; lambda = 0.0)
 
@@ -7,13 +8,13 @@ function grad_one_step(current_parameters, aggr_grad, sim_output::SimulationOutp
         G .= aggr_grad
     end
 
-	# define the likelihood function
-	obj_func = params_vec -> objective_func(
+    # define the likelihood function
+    obj_func = params_vec -> objective_func(
 		params_vec,
 
 		sim_output = sim_output,
 		lambda = lambda
-	)
+    )
     next_grad = ForwardDiff.gradient(obj_func, current_parameters)
 
     return next_grad
@@ -21,13 +22,13 @@ end
 
 function get_lkl_val(current_parameters, sim_output::SimulationOutput; lambda = 0.0)
 
-	# define the likelihood function
-	obj_func = params_vec -> objective_func(
+    # define the likelihood function
+    obj_func = params_vec -> objective_func(
 		params_vec,
 
 		sim_output = sim_output,
 		lambda = lambda
-	)
+    )
     likelihood = obj_func(current_parameters)
 
     return likelihood
@@ -35,7 +36,7 @@ end
 
 # processing data
 function create_LTS_sim_hyper(;
-	kwargs...
+    kwargs...
 )
     sim_hyper = SimHyperParams(
 		param_seed = 1, 
@@ -46,16 +47,16 @@ function create_LTS_sim_hyper(;
 		covariate_tup = kwargs[:covariate_tup],
 		sim_no = kwargs[:sim_no],
 		comments = kwargs[:comments]
-	)
-	return sim_hyper
+    )
+    return sim_hyper
 end
 
 # ——— Build the 3D tensor according to visit_group designations ———
 function build_tensor_designation(df::DataFrame,
-                                  symptom_names::Vector{String},
-                                  visit_prefixes::Vector{String},
-                                  time_labels::Vector{String};
-                                  Ttype::Type{T}=Int) where {T}
+    symptom_names::Vector{String},
+    visit_prefixes::Vector{String},
+    time_labels::Vector{String};
+    Ttype::Type{T}=Int) where {T}
     N = nrow(df)
     Tn = length(time_labels)
     S = length(symptom_names)
@@ -76,11 +77,9 @@ function build_tensor_designation(df::DataFrame,
                     # build one column at a time, per patient
                     for prefix in visit_prefixes
                         grp_col = Symbol(prefix * ".visit_group")
-                        
+
                         # if the entry matches the time label, use it
-                        # println(df[i, grp_col] !== missing)
                         if df[i, grp_col] !== missing
-                            # println("hit")
                             if df[i, grp_col] == label
                                 sym_col = Symbol(prefix * "." * sym)
                                 if df[i, sym_col] !== missing
@@ -101,9 +100,66 @@ function build_tensor_designation(df::DataFrame,
     return X
 end
 
+# ——— Build the 3D tensor according to visit_group designations ———
+function build_tensor_designation_digihero(df::DataFrame,
+    symptom_names::Vector{String},
+    visit_prefixes::Vector{String},
+    time_labels::Vector{String};
+    Ttype::Type{T}=Int) where {T}
+    N = nrow(df)
+    Tn = length(time_labels)
+    S = length(symptom_names)
+    X = Array{T}(undef, N, Tn, S)
+    X .= -1
+
+    for (j, sym) in enumerate(symptom_names)
+        for (k, label) in enumerate(time_labels)
+            for i in 1:N
+                col = Symbol(label * sym)
+                if hasproperty(df, col) && df[i, col] !== missing
+                    X[i, k, j] = convert(T, df[i, col])
+                else
+                    X[i, k, j] = T(-1)
+                end
+
+            end
+
+        end
+    end
+
+    return X
+end
+
+function map_symptoms_severity_to_score(df)
+    # symptom_severities_dict = Dict(
+    #     "Weiß nicht" => -1,
+    #     "Gar nicht" => 0.0,
+    #     "Sehr schwach" => 0.2,
+    #     "Schwach" => 0.4,
+    #     "Mittelmäßig" => 0.6,
+    #     "Schwer" => 0.8,
+    #     "Sehr schwer" => 1.0)
+    new_df = DataFrame()
+    # for (col_name, col) in zip(names(df), eachcol(df))
+    #     if col_name in covariates_list
+    #         new_df[!, col_name] = col
+    #     else
+    #         new_df[!, col_name] = map(x -> x === missing ? -1 : (get(symptom_severities_dict, String(x), 0) > 0.4 ? 1 : 0), col)
+    #     end
+    # end
+    for (col_name, col) in zip(names(df), eachcol(df))
+        if col_name in covariates_list
+            new_df[!, col_name] = col
+        else
+            new_df[!, col_name] = map(x -> x === missing ? -1 : x, col)
+        end
+    end
+    return new_df
+end
+
 # ——— Build the covariate matrix ———
 function build_covariates(df::DataFrame,
-                          covariate_names::Vector{String})
+    covariate_names::Vector{String})
 
     patient_df = df[:, covariate_names]
     # insertcols!(patient_df, 1, :Intercept => ones(nrow(patient_df)))
@@ -119,28 +175,28 @@ end
 
 # ——— Top‐level preprocess function ———
 function preprocess(df::DataFrame;
-                    covariates::Vector{String},
-                    binary_syms::Vector{String},
-                    cont_syms::Vector{String},
-                    visit_prefixes::Vector{String},
-                    time_labels::Vector{String})
+    covariates::Vector{String},
+    binary_syms::Vector{String},
+    cont_syms::Vector{String},
+    visit_prefixes::Vector{String},
+    time_labels::Vector{String})
 
     # Binary symptoms → Int tensor (with -1 for missing)
-    bernoulli_observations  = build_tensor_designation(df, binary_syms,
-                                        visit_prefixes, time_labels;
-                                        Ttype = Int)
+    bernoulli_observations = build_tensor_designation_digihero(df, binary_syms,
+        visit_prefixes, time_labels;
+        Ttype=Int)
 
     # Continuous symptoms → Float64 tensor (with -1.0 for missing)
-    gaussian_observations = build_tensor_designation(df, cont_syms,
-                                        visit_prefixes, time_labels;
-                                        Ttype = Float64)
+    gaussian_observations = build_tensor_designation_digihero(df, cont_syms,
+        visit_prefixes, time_labels;
+        Ttype=Float64)
 
     # Covariates → matrix
     pat_cov  = build_covariates(df, covariates)
 
     return (
       bernoulli_observations = bernoulli_observations,
-      gaussian_observations   = gaussian_observations
+    #   gaussian_observations   = gaussian_observations
     ), pat_cov
 end
 
@@ -168,8 +224,8 @@ function mask_all_minus_one_matrices(arrs::NamedTuple)
 end
 
 function create_data_sim_params(
-	observations, covariate_df;
-	kwargs...
+    observations, covariate_df;
+    kwargs...
 )
 
     mask = mask_all_minus_one_matrices(observations)
@@ -196,14 +252,14 @@ function create_data_sim_params(
 	covariate_df = covariate_df[.!mask, :]
     covariate_mat = Matrix{Float64}(covariate_df)
 
-	sim_hyper = create_LTS_sim_hyper(;
+    sim_hyper = create_LTS_sim_hyper(;
 		N = N,
         n_obs_tup = n_obs_tup,
         n_states = kwargs[:n_states],
         ref_state = 1,
         covariate_tup = kwargs[:covariate_tup],
-		kwargs...
-	)
+        kwargs...
+    )
 
     model_params = gen_model_params(;
 		seed = sim_hyper.param_seed, 
@@ -211,27 +267,27 @@ function create_data_sim_params(
 		covariate_tup = sim_hyper.covariate_tup, 
 		n_obs_tup = sim_hyper.n_obs_tup, 
 		ref_state = sim_hyper.ref_state,
-	)
+    )
 
-	sim_params = SimParams(
+    sim_params = SimParams(
 		sim_hyper = sim_hyper,
 
-		# obtained from simulation params
+        # obtained from simulation params
 		covariate_mat_headers = names(covariate_df),
 		covariate_mat = covariate_mat, 
 		
 		model_params = model_params
-	)
+    )
 
-	sim_output = SimulationOutput(
+    sim_output = SimulationOutput(
 		sim_params = sim_params,
 		simulation_seed = 1, # doesnt matter
 		
 		states = zeros(N, T),
 		observations = masked_observations
-	)
+    )
 
-	return sim_output
+    return sim_output
 end
 
 function create_sim_mod_data(
@@ -280,7 +336,7 @@ function create_ds_simulation_from_sim_params(
     cont_obs_names = kwargs[:cont_obs_names]
 
     output_df = DataFrame(sim_params.covariate_mat, sim_params.covariate_mat_headers)
-    
+
     for t in 1:size(bernoulli_observations, 2)
         # binary obs
         for symp_i in 1:size(bernoulli_observations, 3)
