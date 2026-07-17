@@ -183,32 +183,12 @@ def map_symptoms_severity_to_binary(df: pd.DataFrame) -> pd.DataFrame:
         df[col] = df[col].fillna(-1).map(severity_mapping)
     return df
 
-def add_symptom_clusters(df: pd.DataFrame) -> pd.DataFrame:
-    timepoints = ["acute", "4weeks", "12weeks"]
-    new_cols: Dict[str, pd.Series] = {}
-
-    for timepoint in timepoints:
-        prefix = f"ih_{timepoint}_sym_"
-        cluster_cols: Dict[str, List[str]] = {}
-
-        for symptom, cluster in symptom_clusters.items():
-            col = f"{prefix}{symptom}"
-            if col in df.columns:
-                cluster_cols.setdefault(cluster, []).append(col)
-        for cluster, cols in cluster_cols.items():
-            sub = df[cols]
-            new_cols[f"ih_{timepoint}_cluster_{cluster}"] = np.where(
-                (sub == 1).any(axis=1), 1,
-                np.where((sub == 0).any(axis=1), 0, -1)
-            )
-
-    return pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1)
 
 def preprocess_file(in_path: Path, out_path: Path, age_categories: List[str] = AGE_CATEGORIES) -> pd.DataFrame:
     df = pd.read_csv(in_path)
+    df = is_healed(df)
     df = rename_columns(df)
     add_age_category_flags(df, age_categories=age_categories)
-    print(df["18-34"])
     add_female_column(df)
     add_comorbidity_column(df)
     df = map_symptoms_severity_to_binary(df)
@@ -219,7 +199,7 @@ def preprocess_file(in_path: Path, out_path: Path, age_categories: List[str] = A
 def main() -> None:
     parser = argparse.ArgumentParser(description="Preprocess DigiHero symptom CSV")
     parser.add_argument("infile", nargs="?", default="data/DigiHero/2026-07-01_data_symptoms_DigiHero_Bonn.csv")
-    parser.add_argument("outfile", nargs="?", default="data/DigiHero/2026-07-01_data_symptoms_DigiHero_Bonn_preprocessed_combined.csv")
+    parser.add_argument("outfile", nargs="?", default="data/DigiHero/2026-07-01_data_symptoms_DigiHero_Bonn_preprocessed.csv")
     args = parser.parse_args()
     preprocess_file(Path(args.infile), Path(args.outfile))
 
