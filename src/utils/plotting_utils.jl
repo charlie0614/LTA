@@ -1,6 +1,7 @@
 using PlotlyJS
 using Statistics
 using StatsBase
+using Plots
 
 cscale = [(0, "white"), (1, "red")]
 
@@ -602,8 +603,8 @@ end
 
 #     xs = collect(1:T)
 #     for s in 1:S
-#         add_trace!(plt, scatter(x=xs, y=vec(tru[s, :]), mode="lines+markers", name=(s==1 ? "True" : "True (s$s)")); row=s, col=1)
-#         add_trace!(plt, scatter(x=xs, y=vec(est[s, :]), mode="lines+markers", name=(s==1 ? "Estimated" : "Estimated (s$s)")); row=s, col=1)
+#         add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(tru[s, :]), mode="lines+markers", name=(s==1 ? "True" : "True (s$s)")); row=s, col=1)
+#         add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(est[s, :]), mode="lines+markers", name=(s==1 ? "Estimated" : "Estimated (s$s)")); row=s, col=1)
 #         relayout!(plt, Dict("yaxis$(s)_title_text" => "prop", "xaxis$(s)_title_text" => (s==S ? "time" : "")))
 #     end
 #     relayout!(plt, title="Observed vs Estimated Bernoulli Proportions", legend_title_text="Series")
@@ -621,8 +622,8 @@ end
 
 #     xs = collect(1:T)
 #     for s in 1:S
-#         add_trace!(plt, scatter(x=xs, y=vec(truM[s, :]), mode="lines+markers", name=(s==1 ? "True mean" : "True mean (s$s)")); row=s, col=1)
-#         add_trace!(plt, scatter(x=xs, y=vec(estM[s, :]), mode="lines+markers", name=(s==1 ? "Estimated mean" : "Estimated mean (s$s)")); row=s, col=1)
+#         add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(truM[s, :]), mode="lines+markers", name=(s==1 ? "True mean" : "True mean (s$s)")); row=s, col=1)
+#         add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(estM[s, :]), mode="lines+markers", name=(s==1 ? "Estimated mean" : "Estimated mean (s$s)")); row=s, col=1)
 #         relayout!(plt, Dict("yaxis$(s)_title_text" => "mean", "xaxis$(s)_title_text" => (s==S ? "time" : "")))
 #     end
 #     relayout!(plt, title="Observed vs Estimated Gaussian Means", legend_title_text="Series")
@@ -793,21 +794,21 @@ function create_bernoulli_proportion_plot2(
         row = div(s - 1, 3) + 1
         col = mod(s - 1, 3) + 1
 
-        add_trace!(plt, scatter(
+        add_trace!(plt, PlotlyJS.scatter(
                 x=xs, y=vec(tru[s, :]),
                 mode="lines+markers",
                 name=(s == 1 ? "True" : "True ($(titles[s]))"),
                 showlegend=(s == 1 ? true : false),
                 line=attr(color="blue")
             ); row=row, col=col)
-        add_trace!(plt, scatter(
+        add_trace!(plt, PlotlyJS.scatter(
                 x=[xs[2], xs[4]],
                 y=[vec(tru[s, :])[2], vec(tru[s, :])[4]],
                 mode="lines+markers",
                 showlegend=false,
                 line=attr(color="blue", dash="dash")
             ); row=row, col=col)
-        add_trace!(plt, scatter(x=xs, y=vec(est[s, :]), mode="lines+markers", name=(s == 1 ? "Estimated" : "Estimated ($(titles[s]))"), showlegend=(s == 1 ? true : false), line=attr(color="red")); row=row, col=col)
+        add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(est[s, :]), mode="lines+markers", name=(s == 1 ? "Estimated" : "Estimated ($(titles[s]))"), showlegend=(s == 1 ? true : false), line=attr(color="red")); row=row, col=col)
         relayout!(plt;
             Symbol("yaxis$(s)") => attr(title="Percentage Frequency"),
             Symbol("xaxis$(s)") => attr(title=(s == S ? "time" : ""))  # only bottom row gets x-title
@@ -841,7 +842,7 @@ function create_bernoulli_proportion_plot_fup(
         row = div(s - 1, 3) + 1
         col = mod(s - 1, 3) + 1
 
-        add_trace!(plt, scatter(
+        add_trace!(plt, PlotlyJS.scatter(
                 x=xs, y=vec(tru[s, :]),
                 mode="lines+markers",
                 name=(s == 1 ? "True" : "True ($(titles[s]))"),
@@ -849,7 +850,7 @@ function create_bernoulli_proportion_plot_fup(
                 line=attr(color="blue")
             ); row=row, col=col)
         for i in 1:floor(Int, T/2 -1)
-            add_trace!(plt, scatter(
+            add_trace!(plt, PlotlyJS.scatter(
                     x=[xs[2*i], xs[2*i+2]],
                     y=[vec(tru[s, :])[2*i], vec(tru[s, :])[2*i+2]],
                     mode="lines+markers",
@@ -857,7 +858,7 @@ function create_bernoulli_proportion_plot_fup(
                     line=attr(color="blue", dash="dash")
                 ); row=row, col=col)
         end
-        add_trace!(plt, scatter(x=xs, y=vec(est[s, :]), mode="lines+markers", name=(s == 1 ? "Estimated" : "Estimated ($(titles[s]))"), showlegend=(s == 1 ? true : false), line=attr(color="red")); row=row, col=col)
+        add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(est[s, :]), mode="lines+markers", name=(s == 1 ? "Estimated" : "Estimated ($(titles[s]))"), showlegend=(s == 1 ? true : false), line=attr(color="red")); row=row, col=col)
         relayout!(plt;
             Symbol("yaxis$(s)") => attr(title="Percentage Frequency"),
             Symbol("xaxis$(s)") => attr(title=(s == S ? "time" : ""))  # only bottom row gets x-title
@@ -887,8 +888,8 @@ function create_gaussian_mean_plot(
     xs = collect(1:T)
 
     for s in 1:S
-        add_trace!(plt, scatter(x=xs, y=vec(truM[s, :]), mode="lines+markers", name=(s==1 ? "True mean" : "True mean (s$s)")); row=s, col=1)
-        add_trace!(plt, scatter(x=xs, y=vec(estM[s, :]), mode="lines+markers", name=(s==1 ? "Estimated mean" : "Estimated mean (s$s)")); row=s, col=1)
+        add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(truM[s, :]), mode="lines+markers", name=(s==1 ? "True mean" : "True mean (s$s)")); row=s, col=1)
+        add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(estM[s, :]), mode="lines+markers", name=(s==1 ? "Estimated mean" : "Estimated mean (s$s)")); row=s, col=1)
         relayout!(plt;
 			Symbol("yaxis$(s)") => attr(title = "Mean"),
 			Symbol("xaxis$(s)") => attr(title = (s == S ? "time" : ""))  # only bottom row gets x-title
@@ -1131,7 +1132,7 @@ function plot_median_and_CI(
         col = mod(s - 1, 3) + 1
 
         # upper CI
-        add_trace!(plt, scatter(
+        add_trace!(plt, PlotlyJS.scatter(
             x=xs,
             y=vec(upper_props[s, :]),
             mode="lines",
@@ -1141,7 +1142,7 @@ function plot_median_and_CI(
         ); row=row, col=col)
 
         # lower CI + shaded fill
-        add_trace!(plt, scatter(
+        add_trace!(plt, PlotlyJS.scatter(
             x=xs,
             y=vec(lower_props[s, :]),
             mode="lines",
@@ -1153,7 +1154,7 @@ function plot_median_and_CI(
         ); row=row, col=col)
 
         # median estimate
-        add_trace!(plt, scatter(
+        add_trace!(plt, PlotlyJS.scatter(
             x=xs,
             y=vec(median_props[s, :]),
             mode="lines+markers",
@@ -1163,7 +1164,7 @@ function plot_median_and_CI(
         ); row=row, col=col)
 
         # true values
-        add_trace!(plt, scatter(
+        add_trace!(plt, PlotlyJS.scatter(
             x=xs,
             y=vec(true_props[s, :]),
             mode="lines+markers",
@@ -1473,4 +1474,36 @@ function waterfall_plot(
     plt = PlotlyJS.plot(traces, layout)
 
     return plt
+end
+
+
+function estimated_states_over_time(
+    est_output::EstimationOutput;
+    simulation_seed::Integer = 1,
+    T::Integer = 5,
+    type::AbstractString = "best_fitted",
+    n_states::Integer = 3
+)
+    estimated_sim_output = run_simulation_from_estimation(
+        est_output;
+        simulation_seed = simulation_seed,
+        T = T,
+        type = type
+    )
+
+    M = zeros(Int, T, n_states)
+    
+    for timepoint in 1:T
+        cm = countmap(estimated_sim_output.states[:, timepoint])
+        for j in 1:n_states
+            M[timepoint, j] = get(cm, j, 0)
+        end
+    end
+    
+    fig = areaplot(1:T, M,
+        labels = ["State " * string(j) for j in 1:n_states],
+        xlabel = "Timepoint",
+        legend = :outerright)
+
+    return fig
 end

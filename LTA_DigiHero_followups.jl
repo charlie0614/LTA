@@ -5,13 +5,14 @@ using CSV
 using DataFrames
 using JLD2
 using PlotlyJS
+using Plots
 
 ######### PREPROCESSING ##########
 
 sim_dir = "data/DigiHero/"
 n_states = 3
-sim_no = string("2026_06_02/", n_states, "states/age_sex_comorbidity_covs_200its")
-combined_all = CSV.read(sim_dir * "2026-06-02_data_symptoms_DigiHero_Bonn_preprocessed.csv", DataFrame, missingstring=["", "NA"]);
+sim_no = string("2026_07_01/", n_states, "states/age_sex_comorbidity_covs")
+combined_all = CSV.read(sim_dir * "2026-07-01_data_symptoms_DigiHero_Bonn_preprocessed.csv", DataFrame, missingstring=["", "NA"]);
 
 println("Running simulation with ", sim_no)
 
@@ -122,3 +123,5 @@ PlotlyJS.savefig(fig5, "outputs/" * sim_no * "/results/plots/initial_probs_covs.
 fig = LTA.ensemble_uq_fup(estimation_output; T=10, symptom_names=symptoms_list_fup, observation_type="bernoulli", num_multistarts=10)
 PlotlyJS.savefig(fig, "outputs/" * sim_no * "/results/plots/ensemble_uq.png", width=1500, height=800)
 
+fig = LTA.estimated_states_over_time(estimation_output; T=10, type="best_fitted")
+Plots.savefig(fig, "outputs/" * sim_no * "/results/plots/estimated_states_over_time.png")
