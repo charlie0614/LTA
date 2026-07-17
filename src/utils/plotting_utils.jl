@@ -785,8 +785,9 @@ function create_bernoulli_proportion_plot2(
              symptom_names#[string("Bernoulli proportion — ", n) for n in symptom_names]
     print(length([string(t) for t in titles]),  " S ", S)
     titles = reshape([string(t) for t in titles], S, 1)
-
-    plt = make_subplots(rows=4, cols=3; shared_xaxes=true, vertical_spacing=0.06, subplot_titles=titles)
+    
+    nrows = cld(S, 3)
+    plt = make_subplots(rows=nrows, cols=3; shared_xaxes=true, vertical_spacing=0.02, horizontal_spacing=0.02, subplot_titles=titles)
     xs = collect(1:T)
 
     for s in 1:S
@@ -816,7 +817,7 @@ function create_bernoulli_proportion_plot2(
     end
 
     relayout!(plt, title="Observed vs Estimated Bernoulli Proportions",
-        legend_title_text="Series", height=300 + 75 * S, width=1200)
+        legend_title_text="Series", height=300 + 200 * nrows, width=2000)
     return plt
 end
 
@@ -834,7 +835,8 @@ function create_bernoulli_proportion_plot_fup(
              symptom_names#[string("Bernoulli proportion — ", n) for n in symptom_names]
     titles = reshape([string(t) for t in titles], S, 1)
 
-    plt = make_subplots(rows=4, cols=3; shared_xaxes=true, vertical_spacing=0.06, subplot_titles=titles)
+    nrows = cld(S, 3)
+    plt = make_subplots(rows=nrows, cols=3; shared_xaxes=true, vertical_spacing=0.02, horizontal_spacing=0.02, subplot_titles=titles)
     xs = collect(1:T)
 
     for s in 1:S
@@ -866,7 +868,7 @@ function create_bernoulli_proportion_plot_fup(
     end
 
     relayout!(plt, title="Observed vs Estimated Bernoulli Proportions",
-        legend_title_text="Series", height=300 + 75 * S, width=1200)
+        legend_title_text="Series", height=300 + 200 * nrows, width=2000)
     return plt
 end
 
@@ -1121,7 +1123,8 @@ function plot_median_and_CI(
         rows=nrows,
         cols=3;
         shared_xaxes=true,
-        vertical_spacing=0.06,
+        vertical_spacing=0.02,
+        horizontal_spacing=0.02,
         subplot_titles=titles
     )
 
@@ -1182,8 +1185,8 @@ function plot_median_and_CI(
     relayout!(plt,
         title="Observed vs Estimated Bernoulli Proportions",
         legend_title_text="Series",
-        height=300 + 150 * nrows,
-        width=1200
+        height=300 + 200 * nrows,
+        width=2000
     )
 
     return plt
@@ -1501,9 +1504,16 @@ function estimated_states_over_time(
     end
     
     fig = areaplot(1:T, M,
-        labels = ["State " * string(j) for j in 1:n_states],
+        labels = permutedims(["State " * string(j) for j in 1:n_states]),
         xlabel = "Timepoint",
         legend = :outerright)
 
     return fig
+end
+
+function savefig_auto(fig, path; kwargs...)
+    layout = fig isa PlotlyJS.SyncPlot ? fig.plot.layout : fig.layout
+    w = get(layout.fields, :width, 700)   # Fallback falls nicht gesetzt
+    h = get(layout.fields, :height, 500)
+    PlotlyJS.savefig(fig, path; width=w, height=h, kwargs...)
 end
