@@ -1200,7 +1200,7 @@ function plot_transition_matrices(beta_transition::Array{<:Real}, range::Abstrac
     cols = 3
     rows = ceil(Int, n / cols)
     
-    fig_trans_covs = PlotlyJS.make_subplots(rows=rows, cols=cols)
+    fig_trans_covs = PlotlyJS.make_subplots(rows=rows, cols=cols, horizontal_spacing=0.06, vertical_spacing=0.06)
 
     for (i, sig) in enumerate(range)
         trans_mat = get_transition_mat(beta_transition, [1.0, sig])
@@ -1209,6 +1209,7 @@ function plot_transition_matrices(beta_transition::Array{<:Real}, range::Abstrac
         col = mod(i - 1, 3) + 1
         add_trace!(fig_trans_covs, trace, row=row, col=col)
     end
+    relayout!(fig_trans_covs, title="Initial State Probabilities for Different Covariate Values", height=300 + 200 * rows, width=2000)
 
     return fig_trans_covs
 end
@@ -1221,7 +1222,7 @@ function plot_initial_probs(beta_initial::Array{<:Real}, range::AbstractRange{Fl
     rows = ceil(Int, n / cols)
     
     fig_initials_covs = PlotlyJS.make_subplots(
-        rows=rows, cols=cols
+        rows=rows, cols=cols, horizontal_spacing=0.1, vertical_spacing=0.1
     )
 
     for (i, sig) in enumerate(range)
@@ -1231,6 +1232,7 @@ function plot_initial_probs(beta_initial::Array{<:Real}, range::AbstractRange{Fl
         col = mod(i - 1, 3) + 1
         add_trace!(fig_initials_covs, trace, row=row, col=col)
     end
+    relayout!(fig_initials_covs, title="Initial State Probabilities for Different Covariate Values", height=300 + 200 * rows, width=1000)
 
     return fig_initials_covs
 end

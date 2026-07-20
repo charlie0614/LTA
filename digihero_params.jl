@@ -69,8 +69,7 @@ covariates_list = ["female", "30-39", "40-59", "60+", "alpha", "delta", "omicron
 # covariates_list = ["female", "30-39", "40-59", "60+", "comorbidity"]
 covariates_list_wo_comorbidities_new_agegroups = ["female", "30-59", "60+"]
 covariates_list_wo_comorbidities = ["female", "30-39", "40-59", "60+"]
-# covariates_list_new_agegroups = ["female", "35-59", "60-79", "80+", "comorbidity"]
-covariates_list_new_agegroups = ["female", "35-59", "60-79", "comorbidity"]
+covariates_list_new_agegroups = ["female", "35-59", "60-79", "80+", "comorbidity"]
 
 
 # covariates_list = String[]

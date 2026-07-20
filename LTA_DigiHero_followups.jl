@@ -36,19 +36,19 @@ preprocessed_df = add_dummy_symptom_cols(preprocessed_df)
 preprocessed_df = filter(row -> !all(ismissing, row[Not(covariates_list_new_agegroups)]), preprocessed_df)
 
 sim_output = LTA.create_sim_mod_data(preprocessed_df; covs=covariates_list_new_agegroups, bins=symptoms_list_fup, conts=String[], visits=String[], labels=["pcc_" * string(timepoints)*"months_sym_" for timepoints in collect(3:3:30)], n_states=n_states, covariate_tup=(initial=covariates_list_new_agegroups, trans=covariates_list_new_agegroups, em=[]), sim_no=sim_no, comments="")
-save("outputs/" * sim_no * "/simulation/sim_output.jld2", "sim_output", sim_output)
+# save("outputs/" * sim_no * "/simulation/sim_output.jld2", "sim_output", sim_output)
 
 # ############ ESTIMATION #############
 
-estimation_output = LTA.run_estimation(sim_output; est_seed=1,
-    # meth = "GradientDescent",
-    meth="BFGS",
-    n_starts=20,
-    iterations=50)
+# estimation_output = LTA.run_estimation(sim_output; est_seed=1,
+#     # meth = "GradientDescent",
+#     meth="BFGS",
+#     n_starts=20,
+#     iterations=50)
 
-save("outputs/" * sim_no * "/results/estimates/est_output.jld2", "estimation_output", estimation_output)
+# save("outputs/" * sim_no * "/results/estimates/est_output.jld2", "estimation_output", estimation_output)
 
-# estimation_output = load("outputs/" * sim_no * "/results/estimates/est_output.jld2", "estimation_output")
+estimation_output = load("outputs/" * sim_no * "/results/estimates/est_output.jld2", "estimation_output")
 
 mkpath("outputs/" * sim_no * "/results/plots")
 
@@ -70,7 +70,7 @@ LTA.savefig_auto(fig_em, "outputs/" * sim_no * "/results/plots/emission_matrix.p
 
 titles = reshape(["Emission matrix", "Transition matrix", "Initial States"], 1, 3)
 fig_em_trans = PlotlyJS.make_subplots(
-    rows=1, cols=3, column_widths=[0.4, 0.4, 0.2], subplot_titles=titles
+    rows=1, cols=3, column_widths=[0.4, 0.4, 0.2], subplot_titles=titles, vertical_spacing=0.06
 )
 em_states = LTA.get_bernoulli_probs(best_model_params.emissions.beta_bernoulli, sim_params.covariate_mat[1, :][covariate_idx[:em]])
 true_heat_trace = LTA.plot_single_bernoulli_probs(em_states; symptom_labels=symptoms_list_fup)
@@ -92,7 +92,7 @@ relayout!(fig_em_trans,
     xaxis2_showticklabels=true,
     xaxis3_showticklabels=false
 )
-LTA.savefig_auto(fig_em_trans, "outputs/" * sim_no * "/results/plots/heatmaps.png")
+LTA.savefig_auto(fig_em_trans, "outputs/" * sim_no * "/results/plots/heatmaps.png", width=1200)
 
 obs = sim_output.observations.bernoulli_observations
 
