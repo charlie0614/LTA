@@ -802,13 +802,13 @@ function create_bernoulli_proportion_plot2(
                 showlegend=(s == 1 ? true : false),
                 line=attr(color="blue")
             ); row=row, col=col)
-        add_trace!(plt, PlotlyJS.scatter(
-                x=[xs[2], xs[4]],
-                y=[vec(tru[s, :])[2], vec(tru[s, :])[4]],
-                mode="lines+markers",
-                showlegend=false,
-                line=attr(color="blue", dash="dash")
-            ); row=row, col=col)
+        # add_trace!(plt, PlotlyJS.scatter(
+        #         x=[xs[2], xs[4]],
+        #         y=[vec(tru[s, :])[2], vec(tru[s, :])[4]],
+        #         mode="lines+markers",
+        #         showlegend=false,
+        #         line=attr(color="blue", dash="dash")
+        #     ); row=row, col=col)
         add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(est[s, :]), mode="lines+markers", name=(s == 1 ? "Estimated" : "Estimated ($(titles[s]))"), showlegend=(s == 1 ? true : false), line=attr(color="red")); row=row, col=col)
         relayout!(plt;
             Symbol("yaxis$(s)") => attr(title="Percentage Frequency"),
@@ -851,15 +851,15 @@ function create_bernoulli_proportion_plot_fup(
                 showlegend=(s == 1 ? true : false),
                 line=attr(color="blue")
             ); row=row, col=col)
-        for i in 1:floor(Int, T/2 -1)
-            add_trace!(plt, PlotlyJS.scatter(
-                    x=[xs[2*i], xs[2*i+2]],
-                    y=[vec(tru[s, :])[2*i], vec(tru[s, :])[2*i+2]],
-                    mode="lines+markers",
-                    showlegend=false,
-                    line=attr(color="blue", dash="dash")
-                ); row=row, col=col)
-        end
+        # for i in 1:floor(Int, T/2 -1)
+        #     add_trace!(plt, PlotlyJS.scatter(
+        #             x=[xs[2*i], xs[2*i+2]],
+        #             y=[vec(tru[s, :])[2*i], vec(tru[s, :])[2*i+2]],
+        #             mode="lines+markers",
+        #             showlegend=false,
+        #             line=attr(color="blue", dash="dash")
+        #         ); row=row, col=col)
+        # end
         add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(est[s, :]), mode="lines+markers", name=(s == 1 ? "Estimated" : "Estimated ($(titles[s]))"), showlegend=(s == 1 ? true : false), line=attr(color="red")); row=row, col=col)
         relayout!(plt;
             Symbol("yaxis$(s)") => attr(title="Percentage Frequency"),
