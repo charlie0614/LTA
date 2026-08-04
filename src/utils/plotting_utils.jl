@@ -1198,7 +1198,8 @@ function plot_median_and_CI(
     lower_props::AbstractMatrix,
     upper_props::AbstractMatrix,
     true_props::AbstractMatrix;
-    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing
+    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing,
+    quantile::Float64 = 0.05
 )
     @assert size(median_props) == size(true_props)
     @assert size(lower_props) == size(true_props)
@@ -1246,7 +1247,7 @@ function plot_median_and_CI(
             line=attr(width=0),
             fill="tonexty",
             fillcolor="rgba(255,0,0,0.2)",
-            name=(s == 1 ? "95% CI" : ""),
+            name=(s == 1 ? string((1-quantile)*100) * "% CI" : ""),
             showlegend=(s == 1)
         ); row=row, col=col)
 
@@ -1414,7 +1415,8 @@ function ensemble_uq_monthly(
     T::Integer = 5,
     observation_type::AbstractString = "bernoulli",
     symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing,
-    num_multistarts::Integer = 10
+    num_multistarts::Integer = 10,
+    quantile::Float64 = 0.05
 )
 
     lkl_idx = sortperm(est_output.fitted_log_lkl_list)
@@ -1456,9 +1458,65 @@ function ensemble_uq_monthly(
     end
     true_props_mat = reduce(vcat, [tp[1]' for tp in true_plots])
 
-    median, lower, upper = summarize_sim_plots(sim_plots; q=0.05)
+    median, lower, upper = summarize_sim_plots(sim_plots; q=quantile)
 
-    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names = symptom_names)
+    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names = symptom_names, quantile=quantile)
+
+    return fig
+
+end
+
+function ensemble_uq_monthly_startingparams(
+    est_output::EstimationOutput;
+    T::Integer = 5,
+    observation_type::AbstractString = "bernoulli",
+    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing,
+    num_multistarts::Integer = 10,
+    quantile::Float64 = 0.05
+)
+
+    lkl_idx = sortperm(est_output.fitted_log_lkl_list)
+    # plt = make_subplots(rows=4, cols=3; shared_xaxes=true, vertical_spacing=0.06, subplot_titles=symptom_names)
+    sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
+    true_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
+    for multistart in 1:num_multistarts
+        
+        for simulation_seed in 1:10
+            estimated_sim_output = run_simulation_from_model_params(
+                est_output;
+                simulation_seed = simulation_seed,
+                T = T,
+                model_params=est_output.starting_model_params[lkl_idx][multistart]
+            )
+
+            fig = if observation_type == "bernoulli"
+                # proportions over time (S × T expected after _symptom_time)
+                estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
+                true_props      = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
+                create_bernoulli_proportion_plot_monthly(estimated_props, true_props; symptom_names = symptom_names)
+
+            elseif observation_type == "gaussian"
+                # per-time means (one subplot per symptom)
+                est_gauss  = estimated_sim_output.observations.gaussian_observations
+                true_gauss = est_output.sim_output.observations.gaussian_observations
+                create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names = symptom_names)
+
+            else
+                error("Unknown observation type: $observation_type (use \"bernoulli\" or \"gaussian\")")
+            end
+            for symptom in 1:length(symptom_names)
+                push!(sim_plots[symptom], fig.plot.data[2*symptom][:y])
+                if simulation_seed == 1
+                    push!(true_plots[symptom], fig.plot.data[2*symptom - 1][:y])
+                end
+            end
+        end
+    end
+    true_props_mat = reduce(vcat, [tp[1]' for tp in true_plots])
+
+    median, lower, upper = summarize_sim_plots(sim_plots; q=quantile)
+
+    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names = symptom_names, quantile=quantile)
 
     return fig
 

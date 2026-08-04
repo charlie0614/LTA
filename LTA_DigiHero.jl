@@ -112,5 +112,9 @@ LTA.savefig_auto(fig5, "outputs/" * sim_no * "/results/plots/initial_probs_covs.
 fig = LTA.ensemble_uq_monthly(estimation_output; T=5, symptom_names=symptoms_list_fup, observation_type="bernoulli", num_multistarts=15)
 LTA.savefig_auto(fig, "outputs/" * sim_no * "/results/plots/ensemble_uq.png")
 
+# Ensemble-based uncertainty quantification 
+fig = LTA.ensemble_uq_monthly_startingparams(estimation_output; T=5, symptom_names=symptoms_list_fup, observation_type="bernoulli", num_multistarts=20, quantile=0.05)
+LTA.savefig_auto(fig, "outputs/" * sim_no * "/results/plots/ensemble_uq_startingparams.png")
+
 fig = LTA.estimated_states_over_time(estimation_output; T=5, type="best_fitted", n_states=n_states)
 Plots.savefig(fig, "outputs/" * sim_no * "/results/plots/estimated_states_over_time.png")
