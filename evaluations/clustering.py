@@ -4,6 +4,19 @@ from scipy.spatial.distance import pdist
 import numpy as np
 import matplotlib.pyplot as plt
 
+symptoms = ["abdomen_pain", 
+    "arrhythmia",
+    "diarrhea",
+    "fatigue",
+    "headache",
+    "joint_muscle_pain",
+    "nausea",
+    "pms",
+    "shortness_of_breath",
+    "sleep_disorder",
+    "vertigo"
+]
+symptoms = [symptom.replace("_", " ").title() for symptom in symptoms]
 
 def build_state_feature_matrix(est_emission_list):
     state_vectors = []
@@ -12,7 +25,7 @@ def build_state_feature_matrix(est_emission_list):
     for model_id, model in enumerate(est_emission_list):
         for state_id in range(model.shape[1]):
             state_vectors.append(model[:, state_id])
-            labels.append(f"M{model_id}_S{state_id}")
+            labels.append(f"M{model_id+3}_S{state_id}")
 
     X = np.array(state_vectors)
     return X, labels
@@ -50,10 +63,9 @@ def compute_hierarch_clustering(corr_pairwdist,
     return cluster_hierarch, max_coph_dist_mat
 
 
-sim_no = "age_wave"
-
-with h5py.File(f"estimates/est_emission_mats_{sim_no}.h5", "r") as f:
-    est_emission_mat_list = [f[f'em_states_{i+1}'][:] for i in range(3, 8)]
+sim_no = "age_sex_comorbidity_covs_fups"
+with h5py.File(f"outputs/2026_07_20/est_emission_mats_{sim_no}.h5", "r") as f:
+    est_emission_mat_list = [f[f'em_states_{i+1}'][:] for i in range(2, 8)]
 
 state_feature_matrix, state_labels = build_state_feature_matrix(est_emission_mat_list)
 
@@ -84,8 +96,6 @@ dendro = hierarchy.dendrogram(
     leaf_rotation=90,
     ax=ax_dendro
 )
-ax_dendro.set_ylabel("Distanz")
-ax_dendro.set_title("Hierarchisches Clustering der HMM-States (Emissionen)")
 ax_dendro.set_xticks([])
 
 leaf_order = dendro['leaves']
@@ -102,8 +112,8 @@ im = ax_heatmap.imshow(
 ax_heatmap.set_xticks(range(len(labels_ordered)))
 ax_heatmap.set_xticklabels(labels_ordered, rotation=90)
 ax_heatmap.set_yticks(range(state_feature_matrix.shape[1]))
-ax_heatmap.set_yticklabels([f"Feature {i}" for i in range(state_feature_matrix.shape[1])])
+ax_heatmap.set_yticklabels(symptoms)
 
 fig.colorbar(im, cax=ax_cbar)
 
-plt.savefig("outputs/plots/clustering.png", bbox_inches='tight', dpi=300)
+plt.savefig("outputs/2026_07_20/clustering.png", bbox_inches='tight', dpi=300)

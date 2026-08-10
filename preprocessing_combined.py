@@ -198,8 +198,8 @@ def preprocess_file(in_path: Path, out_path: Path, age_categories: List[str] = A
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Preprocess DigiHero symptom CSV")
-    parser.add_argument("infile", nargs="?", default="data/DigiHero/2026-07-01_data_symptoms_DigiHero_Bonn.csv")
-    parser.add_argument("outfile", nargs="?", default="data/DigiHero/2026-07-01_data_symptoms_DigiHero_Bonn_preprocessed.csv")
+    parser.add_argument("infile", nargs="?", default="data/DigiHero/2026-07-20_data_symptoms_DigiHero_Bonn.csv")
+    parser.add_argument("outfile", nargs="?", default="data/DigiHero/2026-07-20_data_symptoms_DigiHero_Bonn_preprocessed.csv")
     args = parser.parse_args()
     preprocess_file(Path(args.infile), Path(args.outfile))
 

@@ -1,10 +1,14 @@
-include("src/LTA.jl")
+include("../src/LTA.jl")
+
+using JLD2
+using PlotlyJS
 
 
-n_state_list = collect(4:8)
-sim_no_list = string.(n_state_list) .* "states_age_wave_covs"
+n_state_list = collect(3:9)
+sim_no_list = string.(n_state_list) .* "states/age_sex_comorbidity_covs_fups"
 
-save_dr_list = "estimates/" .* sim_no_list .* "/results/estimates"
+sim_dir = "outputs/2026_07_20/"
+save_dr_list = sim_dir .* sim_no_list .* "/results/estimates"
 est_output_list = [load(save_dr * "/est_output.jld2", "estimation_output") for save_dr in save_dr_list]
 
 lkl_list = [minimum(est_output.fitted_log_lkl_list) for est_output in est_output_list]
@@ -74,4 +78,4 @@ aic_bic_plt = plot_aic_bic(
     labels =  ["$i States" for i in n_state_list]
 )
 
-PlotlyJS.savefig(aic_bic_plt, "aic_bic_age_wave_covs.png", width=1200, height=800)
+PlotlyJS.savefig(aic_bic_plt, sim_dir * "aic_bic_age_sex_comorbidity_covs_fups.png", width=1200, height=800)
