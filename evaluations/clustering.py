@@ -4,19 +4,47 @@ from scipy.spatial.distance import pdist
 import numpy as np
 import matplotlib.pyplot as plt
 
-symptoms = ["abdomen_pain", 
+# symptoms = ["abdomen_pain",
+#             "arrhythmia",
+#             "diarrhea",
+#             "fatigue",
+#             "headache",
+#             "joint_muscle_pain",
+#             "nausea",
+#             "pms",
+#             "shortness_of_breath",
+#             "sleep_disorder",
+#             "vertigo"
+#             ]
+
+symptoms = [
+    "abdomen_pain",
     "arrhythmia",
+    "back_pain",
+    "chest_pain",
+    "circulatory_problems",
+    "concentration_problems",
     "diarrhea",
+    "fainting_spell",
     "fatigue",
     "headache",
     "joint_muscle_pain",
+    "light_sensitivity",
+    "low_performance",
+    "memory_impairment",
+    "muscle_twitching",
+    "muscle_weakness",
     "nausea",
+    "pain_intercourse",
     "pms",
+    "rapid_exhaustion",
+    "sensory_disturbances",
     "shortness_of_breath",
     "sleep_disorder",
-    "vertigo"
-]
+    "vertigo"]
+
 symptoms = [symptom.replace("_", " ").title() for symptom in symptoms]
+
 
 def build_state_feature_matrix(est_emission_list):
     state_vectors = []
@@ -32,9 +60,9 @@ def build_state_feature_matrix(est_emission_list):
 
 
 def compute_hierarch_clustering(corr_pairwdist,
-                                 methods=['single', 'complete', 'average',
-                                          'weighted', 'centroid', 'median',
-                                          'ward']):
+                                methods=['single', 'complete', 'average',
+                                         'weighted', 'centroid', 'median',
+                                         'ward']):
     # NOTE: if changing method, pay attention to linkage methods;
     #       'centroid', 'median', and 'ward' are correctly defined only if
     #       Euclidean pairwise metric is used in distance matrix that we used as input.
@@ -63,22 +91,24 @@ def compute_hierarch_clustering(corr_pairwdist,
     return cluster_hierarch, max_coph_dist_mat
 
 
-sim_no = "age_sex_comorbidity_covs_fups"
+sim_no = "age_sex_comorbidity_covs_fups_all_symptoms"
 with h5py.File(f"outputs/2026_07_20/est_emission_mats_{sim_no}.h5", "r") as f:
-    est_emission_mat_list = [f[f'em_states_{i+1}'][:] for i in range(2, 8)]
+    est_emission_mat_list = [f[f'em_states_{i+1}'][:] for i in range(2, 10)]
 
-state_feature_matrix, state_labels = build_state_feature_matrix(est_emission_mat_list)
+state_feature_matrix, state_labels = build_state_feature_matrix(
+    est_emission_mat_list)
 
 # pdist liefert die condensed pairwise distance matrix, die
 # hierarchy.linkage / hierarchy.cophenet erwarten
 pairwdist = pdist(state_feature_matrix, metric='euclidean')
 
-cluster_hierarch, coph_dist_mat = compute_hierarch_clustering(pairwdist)
+cluster_hierarch, coph_dist_mat = compute_hierarch_clustering(
+    pairwdist, methods='complete')
 
-fig = plt.figure(figsize=(14, 8))
+fig = plt.figure(figsize=(12, 6))
 gs = fig.add_gridspec(
     2, 2,
-    height_ratios=[3, 1],
+    height_ratios=[1, 1.5],
     width_ratios=[1, 0.03],
     hspace=0.05,
     wspace=0.02
@@ -94,8 +124,10 @@ dendro = hierarchy.dendrogram(
     cluster_hierarch,
     labels=state_labels,
     leaf_rotation=90,
-    ax=ax_dendro
+    ax=ax_dendro,
+    color_threshold=0
 )
+
 ax_dendro.set_xticks([])
 
 leaf_order = dendro['leaves']
@@ -116,4 +148,5 @@ ax_heatmap.set_yticklabels(symptoms)
 
 fig.colorbar(im, cax=ax_cbar)
 
-plt.savefig("outputs/2026_07_20/clustering.png", bbox_inches='tight', dpi=300)
+plt.savefig("outputs/2026_07_20/clustering_all_symptoms.png",
+            bbox_inches='tight', dpi=300)

@@ -98,19 +98,23 @@ def add_age_category_flags(df: pd.DataFrame, age_categories: List[str] = AGE_CAT
         df[cat] = df[col].apply(flag)
     return df
 
+
 def merge_age_categories(df: pd.DataFrame, merge_cateogories: List[str]) -> pd.DataFrame:
     minimum_age = min(parse_range(cat)[0] for cat in merge_cateogories)
     maximum_age = max(parse_range(cat)[1] for cat in merge_cateogories)
     df[f"{minimum_age}-{maximum_age}"] = df[merge_cateogories].max(axis=1)
     return df
 
+
 def add_female_column(df: pd.DataFrame, col: str = "basis_geschl", female_value: str = "weiblich", out_col: str = "female") -> pd.DataFrame:
     df[out_col] = (df[col] == female_value).astype(int)
     return df
 
+
 def add_comorbidity_column(df: pd.DataFrame, col: str = "CCI_Score", out_col: str = "comorbidity") -> pd.DataFrame:
-    df[out_col] = (df[col] > 1).astype(int) 
+    df[out_col] = (df[col] > 1).astype(int)
     return df
+
 
 def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
     replace_column_names = {
@@ -123,7 +127,7 @@ def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
         "pcc_lcr_4": "pcc_24months",
         "pcc_lcr_5": "pcc_30months",
     }
-    
+
     rename_mapping = {}
     for old, new in replace_column_names.items():
         for col in df.columns:
@@ -131,6 +135,7 @@ def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
                 rename_mapping[col] = col.replace(old, new)
 
     return df.rename(columns=rename_mapping)
+
 
 def is_healed(df: pd.DataFrame) -> pd.DataFrame:
 
@@ -144,22 +149,25 @@ def is_healed(df: pd.DataFrame) -> pd.DataFrame:
         )
         if healed_mask.any():
             for f in range(followup, 6):
-                cols = [c for c in df.columns if c.startswith(f"pcc_lcr_{f}_sym_")]
+                cols = [c for c in df.columns if c.startswith(
+                    f"pcc_lcr_{f}_sym_")]
                 if cols:
                     df.loc[healed_mask, cols] = "Beschwerde liegt nicht vor"
 
     for followup in range(1, 6):
-        followup_sym_cols = [c for c in df.columns if c.startswith(f"pcc_lcr_{followup}_sym_")]
+        followup_sym_cols = [c for c in df.columns if c.startswith(
+            f"pcc_lcr_{followup}_sym_")]
         if followup_sym_cols:
             df[followup_sym_cols] = df[followup_sym_cols].fillna(-1)
-    months3_sym_cols = [c for c in df.columns if c.startswith(f"pcc_sym_12weeks")]
+    months3_sym_cols = [
+        c for c in df.columns if c.startswith(f"pcc_sym_12weeks")]
     if months3_sym_cols:
         df[months3_sym_cols] = df[months3_sym_cols].fillna(-1)
 
     return df
 
 
-def map_symptoms_severity_to_binary(df: pd.DataFrame) -> pd.DataFrame: 
+def map_symptoms_severity_to_binary(df: pd.DataFrame) -> pd.DataFrame:
     symptom_cols = [c for c in df.columns if "_sym_" in c]
     severity_mapping = {
         "Beschwerde liegt nicht vor": 0,
@@ -181,6 +189,14 @@ def map_symptoms_severity_to_binary(df: pd.DataFrame) -> pd.DataFrame:
     }
     for col in symptom_cols:
         df[col] = df[col].fillna(-1).map(severity_mapping)
+
+    followup_prefixes = ("pcc_6months", "pcc_12months",
+                         "pcc_18months", "pcc_24months", "pcc_30months")
+    followup_sym_cols = [
+        c for c in symptom_cols if c.startswith(followup_prefixes)]
+    all_missing = (df[followup_sym_cols] == -1).all(axis=1)
+    df = df[~all_missing]
+
     return df
 
 
@@ -197,9 +213,12 @@ def preprocess_file(in_path: Path, out_path: Path, age_categories: List[str] = A
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Preprocess DigiHero symptom CSV")
-    parser.add_argument("infile", nargs="?", default="data/DigiHero/2026-07-20_data_symptoms_DigiHero_Bonn.csv")
-    parser.add_argument("outfile", nargs="?", default="data/DigiHero/2026-07-20_data_symptoms_DigiHero_Bonn_preprocessed.csv")
+    parser = argparse.ArgumentParser(
+        description="Preprocess DigiHero symptom CSV")
+    parser.add_argument(
+        "infile", nargs="?", default="data/DigiHero/2026-07-20_data_symptoms_DigiHero_Bonn.csv")
+    parser.add_argument(
+        "outfile", nargs="?", default="data/DigiHero/2026-07-20_data_symptoms_DigiHero_Bonn_preprocessed.csv")
     args = parser.parse_args()
     preprocess_file(Path(args.infile), Path(args.outfile))
 

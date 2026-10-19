@@ -7,7 +7,7 @@ cscale = [(0, "white"), (1, "red")]
 
 function get_model_params(
     est_output::EstimationOutput;
-    type = "simulation"
+    type="simulation"
 )
 
     sim_output, sim_params, sim_hyper = unpack(est_output)
@@ -36,11 +36,11 @@ function plot_single_initial(
     mat = reshape(vec, (n_states, 1))
     plt =
         PlotlyJS.heatmap(
-			x = "",
-			y = reverse("State " .* string.(collect(1:n_states))),
-			z = mat[end:-1:1, :],
-			zmin = 0.0, zmax = 1.0,
-			colorscale = cscale,
+            x="",
+            y=reverse("State " .* string.(collect(1:n_states))),
+            z=mat[end:-1:1, :],
+            zmin=0.0, zmax=1.0,
+            colorscale=cscale,
         )
 
     return plt
@@ -48,8 +48,8 @@ end
 
 function compare_initial_heatmaps(
     est_output::EstimationOutput;
-    patient_idx = 1,
-    save_dir = nothing
+    patient_idx=1,
+    save_dir=nothing
 )
     sim_output, sim_params, sim_hyper = unpack(est_output)
 
@@ -64,38 +64,38 @@ function compare_initial_heatmaps(
     subplot_titles = vcat("Simulation<br>-Log-lkl:$(round(Int, est_output.true_log_lkl))", subplot_titles)
     s = length(est_output.fitted_log_lkl_list) + 1
     fig = PlotlyJS.make_subplots(
-		rows = 1, cols = s,
-		subplot_titles = reshape(subplot_titles, 1, s)
+        rows=1, cols=s,
+        subplot_titles=reshape(subplot_titles, 1, s)
     )
 
     # ------------------------------------------------------------------
     # true model
     model_params = get_model_params(
         est_output;
-        type = "simulation"
+        type="simulation"
     )
     initial_states = get_rho_beta_initial_states(
         model_params.beta_initial,
         model_params.rho_initial,
         x_vec[covariate_idx[:initial]])
     true_heat_trace = plot_single_initial(initial_states)
-	add_trace!(fig, true_heat_trace, row = 1, col = 1)
+    add_trace!(fig, true_heat_trace, row=1, col=1)
 
     # loop through all multistarts
     for (val, idx) in enumerate(lkl_idx)
         model_params = get_model_params(
             est_output;
-            type = idx
+            type=idx
         )
         initial_states = get_rho_beta_initial_states(
             model_params.beta_initial,
             model_params.rho_initial,
             x_vec[covariate_idx[:initial]])
         heat_trace = plot_single_initial(initial_states)
-		add_trace!(fig, heat_trace, row = 1, col = val + 1)
+        add_trace!(fig, heat_trace, row=1, col=val + 1)
     end
 
-	relayout!(fig, width = 700 * s, height = 500)
+    relayout!(fig, width=700 * s, height=500)
 
     if !isnothing(save_dir)
         open(save_dir, "w") do io
@@ -117,12 +117,10 @@ function plot_single_transition_mat(
 
     plt =
         PlotlyJS.heatmap(
-			x = "To State " .* string.(collect(1:n_states)),
-			y = reverse("From State " .* string.(collect(1:n_states))),
-			z = mat[end:-1:1, :],
-			zmin = 0.0, zmax = 1.0,
-
-			colorscale = cscale,
+            x="To State " .* string.(collect(1:n_states)),
+            y=reverse("From State " .* string.(collect(1:n_states))),
+            z=mat[end:-1:1, :],
+            zmin=0.0, zmax=1.0, colorscale=cscale,
         )
 
     return plt
@@ -130,8 +128,8 @@ end
 
 function compare_trans_heatmaps(
     est_output::EstimationOutput;
-    patient_idx = 1,
-    save_dir = nothing
+    patient_idx=1,
+    save_dir=nothing
 )
     sim_output, sim_params, sim_hyper = unpack(est_output)
 
@@ -146,34 +144,34 @@ function compare_trans_heatmaps(
     subplot_titles = vcat("Simulation<br>-Log-lkl:$(round(Int, est_output.true_log_lkl))", subplot_titles)
     s = length(est_output.fitted_log_lkl_list) + 1
     fig = PlotlyJS.make_subplots(
-		rows = 7, cols = ceil(Int, s/7),
-		subplot_titles = reshape(subplot_titles, 1, s)
+        rows=7, cols=ceil(Int, s/7),
+        subplot_titles=reshape(subplot_titles, 1, s)
     )
 
     # ------------------------------------------------------------------
     # true model
     model_params = get_model_params(
         est_output;
-        type = "simulation"
+        type="simulation"
     )
     transition_probs = get_rho_beta_transition_mat(
         model_params.beta_transition, model_params.rho_trans, x_vec[covariate_idx[:trans]])
     true_heat_trace = plot_single_transition_mat(transition_probs)
-	add_trace!(fig, true_heat_trace, row = 1, col = 1)
+    add_trace!(fig, true_heat_trace, row=1, col=1)
 
     # loop through all multistarts
     for (val, idx) in enumerate(lkl_idx)
         model_params = get_model_params(
             est_output;
-            type = idx
+            type=idx
         )
         transition_probs = get_rho_beta_transition_mat(
             model_params.beta_transition, model_params.rho_trans, x_vec[covariate_idx[:trans]])
         heat_trace = plot_single_transition_mat(transition_probs)
-		add_trace!(fig, heat_trace, row = floor(Int, val/ceil(Int, s/7)) + 1, col = val % ceil(Int, s/7)+1)
+        add_trace!(fig, heat_trace, row=floor(Int, val/ceil(Int, s/7)) + 1, col=val % ceil(Int, s/7)+1)
     end
 
-	relayout!(fig, width = 800 * s, height = 250)
+    relayout!(fig, width=800 * s, height=250)
 
     if !isnothing(save_dir)
         open(save_dir, "w") do io
@@ -187,7 +185,7 @@ end
 # emissions
 function plot_single_bernoulli_probs(
     mat::Matrix{Float64};
-	symptom_labels = nothing
+    symptom_labels=nothing
 )
 
     if isnothing(symptom_labels)
@@ -196,11 +194,11 @@ function plot_single_bernoulli_probs(
 
     plt =
         PlotlyJS.heatmap(
-			x = symptom_labels,
-			y = reverse("From State " .* string.(collect(1:size(mat, 1)))),
-			z = mat[end:-1:1, :],
-			zmin = 0.0, zmax = 1.0,
-			colorscale = cscale,
+            x=symptom_labels,
+            y=reverse("From State " .* string.(collect(1:size(mat, 1)))),
+            z=mat[end:-1:1, :],
+            zmin=0.0, zmax=1.0,
+            colorscale=cscale,
         )
 
     return plt
@@ -208,8 +206,8 @@ end
 
 function compare_bernoulli_heatmaps(
     est_output::EstimationOutput;
-    patient_idx = 1,
-    save_dir = nothing
+    patient_idx=1,
+    save_dir=nothing
 )
     sim_output, sim_params, sim_hyper = unpack(est_output)
 
@@ -224,32 +222,32 @@ function compare_bernoulli_heatmaps(
     subplot_titles = vcat("Simulation<br>-Log-lkl:$(round(Int, est_output.true_log_lkl))", subplot_titles)
     s = length(est_output.fitted_log_lkl_list) + 1
     fig = PlotlyJS.make_subplots(
-		rows = 1, cols = s,
-		subplot_titles = reshape(subplot_titles, 1, s)
+        rows=1, cols=s,
+        subplot_titles=reshape(subplot_titles, 1, s)
     )
 
     # ------------------------------------------------------------------
     # true model
     model_params = get_model_params(
         est_output;
-        type = "simulation"
+        type="simulation"
     )
     em_states = get_bernoulli_probs(model_params.emissions.beta_bernoulli, x_vec[covariate_idx[:em]])
     true_heat_trace = plot_single_bernoulli_probs(em_states)
-	add_trace!(fig, true_heat_trace, row = 1, col = 1)
+    add_trace!(fig, true_heat_trace, row=1, col=1)
 
     # loop through all multistarts
     for (val, idx) in enumerate(lkl_idx)
         model_params = get_model_params(
             est_output;
-            type = idx
+            type=idx
         )
         em_states = get_bernoulli_probs(model_params.emissions.beta_bernoulli, x_vec[covariate_idx[:em]])
         heat_trace = plot_single_bernoulli_probs(em_states)
-		add_trace!(fig, heat_trace, row = 1, col = val + 1)
+        add_trace!(fig, heat_trace, row=1, col=val + 1)
     end
 
-	relayout!(fig, width = 700 * s, height = 500)
+    relayout!(fig, width=700 * s, height=500)
 
     if !isnothing(save_dir)
         open(save_dir, "w") do io
@@ -262,7 +260,7 @@ end
 
 # gaussian emissions
 function plot_single_gaussian_pdf(;
-	μ::Float64, σ::Float64, x_range::Vector{Float64}, name::String, line_color = "red"
+    μ::Float64, σ::Float64, x_range::Vector{Float64}, name::String, line_color="red"
 )
 
     # Define the normal distribution
@@ -271,18 +269,18 @@ function plot_single_gaussian_pdf(;
     y_values = pdf.(dist, x_range)
 
     trace = PlotlyJS.scatter(
-		x = x_range, y = y_values, 
-		mode = "lines", name = name, 
-		line_color = line_color, fill="tozeroy", showlegend = false)
+        x=x_range, y=y_values,
+        mode="lines", name=name,
+        line_color=line_color, fill="tozeroy", showlegend=false)
 
     return trace
 end
 
 function compare_gaussian_pdf(
     est_output::EstimationOutput;
-	xlims::Vector{Float64} = [0.0, 1.0],
-	ylims::Vector{Float64} = [0.0, 10.0],
-    save_dir = nothing
+    xlims::Vector{Float64}=[0.0, 1.0],
+    ylims::Vector{Float64}=[0.0, 10.0],
+    save_dir=nothing
 )
     sim_output, sim_params, sim_hyper = unpack(est_output)
 
@@ -292,10 +290,10 @@ function compare_gaussian_pdf(
     subplot_titles = vcat(repeat(["Simulation<br>-Log-lkl:$(round(Int, est_output.true_log_lkl))"], sim_hyper.n_obs_tup.gaussian), subplot_titles...)
     s = (length(est_output.fitted_log_lkl_list) + 1) * sim_hyper.n_obs_tup.gaussian
     fig = PlotlyJS.make_subplots(
-		rows = sim_hyper.n_states, cols = s,
-		subplot_titles = reshape(subplot_titles, 1, s),
-		shared_yaxes = "rows",
-		shared_xaxes = "columns"
+        rows=sim_hyper.n_states, cols=s,
+        subplot_titles=reshape(subplot_titles, 1, s),
+        shared_yaxes="rows",
+        shared_xaxes="columns"
     )
 
 
@@ -303,20 +301,20 @@ function compare_gaussian_pdf(
     # true model
     model_params = get_model_params(
         est_output;
-        type = "simulation"
+        type="simulation"
     )
     true_gaussian_emission = convert_gauss_2_true(model_params.emissions.beta_gaussian)
-	x_range = collect(range(xlims[1], xlims[2]; length = 500))
+    x_range = collect(range(xlims[1], xlims[2]; length=500))
     for i in 1:sim_hyper.n_states
         for j in 1:sim_hyper.n_obs_tup.gaussian
             # plot the true gaussian pdf
             true_heat_trace = plot_single_gaussian_pdf(;
-				μ = true_gaussian_emission.means[i, j], 
-				σ = true_gaussian_emission.stds[i, j], 
-				x_range = x_range, 
-				name = "State " * string(i)
+                μ=true_gaussian_emission.means[i, j],
+                σ=true_gaussian_emission.stds[i, j],
+                x_range=x_range,
+                name="State " * string(i)
             )
-			add_trace!(fig, true_heat_trace, row = i, col = j)
+            add_trace!(fig, true_heat_trace, row=i, col=j)
         end
     end
 
@@ -324,20 +322,20 @@ function compare_gaussian_pdf(
     for (val, idx) in enumerate(lkl_idx)
         model_params = get_model_params(
             est_output;
-            type = idx
+            type=idx
         )
         true_gaussian_emission = convert_gauss_2_true(model_params.emissions.beta_gaussian)
-		x_range = collect(range(xlims[1], xlims[2]; length = 500))
+        x_range = collect(range(xlims[1], xlims[2]; length=500))
         for i in 1:sim_hyper.n_states
             for j in 1:sim_hyper.n_obs_tup.gaussian
                 # plot the true gaussian pdf
                 true_heat_trace = plot_single_gaussian_pdf(;
-					μ = true_gaussian_emission.means[i, j], 
-					σ = true_gaussian_emission.stds[i, j], 
-					x_range = x_range, 
-					name = "State " * string(i)
+                    μ=true_gaussian_emission.means[i, j],
+                    σ=true_gaussian_emission.stds[i, j],
+                    x_range=x_range,
+                    name="State " * string(i)
                 )
-				add_trace!(fig, true_heat_trace, row = i, col = val*sim_hyper.n_obs_tup.gaussian + j)
+                add_trace!(fig, true_heat_trace, row=i, col=val*sim_hyper.n_obs_tup.gaussian + j)
             end
         end
     end
@@ -347,13 +345,13 @@ function compare_gaussian_pdf(
     #     relayout!(fig; Symbol("yaxis$(axis_idx)"*"_range") => ylims)
     # end
 
-	relayout!(fig; Symbol("yaxis"*"_range")=> ylims)
-	for axis_idx in 1:(sim_hyper.n_states * (length(lkl_idx) + 1) * sim_hyper.n_obs_tup.gaussian * 2)
-        relayout!(fig; Symbol("yaxis$axis_idx"*"_range")=> ylims)
+    relayout!(fig; Symbol("yaxis"*"_range") => ylims)
+    for axis_idx in 1:(sim_hyper.n_states*(length(lkl_idx)+1)*sim_hyper.n_obs_tup.gaussian*2)
+        relayout!(fig; Symbol("yaxis$axis_idx"*"_range") => ylims)
     end
 
 
-	relayout!(fig, width = 600 * s, height = 500)
+    relayout!(fig, width=600 * s, height=500)
 
     if !isnothing(save_dir)
         open(save_dir, "w") do io
@@ -368,7 +366,7 @@ end
 function rho_trace(
     variables::Vector{String},
     estimates::Vector{Float64};
-	se_vals::Vector{Float64} = zeros(length(estimates))
+    se_vals::Vector{Float64}=zeros(length(estimates))
 )
 
     # handle p_ values
@@ -414,18 +412,18 @@ function rho_trace(
     colors = [get_color(estimates[i], pv[i]) for i in 1:length(estimates)]
 
     trace = PlotlyJS.scatter(
-		x = estimates,
-		y = variables,
-		mode = "markers+text",
-		marker = attr(
-			size = 14,
-			color = colors # Conditional coloring
+        x=estimates,
+        y=variables,
+        mode="markers+text",
+        marker=attr(
+            size=14,
+            color=colors # Conditional coloring
         ),
-		error_x = attr(
-			type = "data",
-			symmetric = true,  # Use asymmetric error bars if needed
-			array = se_vals,  # Upper error (distance from estimate to upper bound)
-			color = colors
+        error_x=attr(
+            type="data",
+            symmetric=true,  # Use asymmetric error bars if needed
+            array=se_vals,  # Upper error (distance from estimate to upper bound)
+            color=colors
             # arrayminus = estimates .- lower_bound  # Lower error (distance from estimate to lower bound)
         )
     )
@@ -441,12 +439,12 @@ function set_all_xranges!(fig, lo, hi)
         if i == 1
             PlotlyJS.relayout!(
                 fig;
-				Symbol("xaxis") => attr(range = (lo, hi)),
+                Symbol("xaxis") => attr(range=(lo, hi)),
             )
         else
             PlotlyJS.relayout!(
                 fig;
-				Symbol("xaxis$i") => attr(range = (lo, hi)),
+                Symbol("xaxis$i") => attr(range=(lo, hi)),
             )
         end
     end
@@ -456,8 +454,8 @@ end
 
 function compare_rhos(
     est_output::EstimationOutput;
-    rho_type = "initial",
-    save_dir = nothing
+    rho_type="initial",
+    save_dir=nothing
 )
     sim_output, sim_params, sim_hyper = unpack(est_output)
 
@@ -467,39 +465,39 @@ function compare_rhos(
     subplot_titles = vcat("Simulation<br>-Log-lkl:$(round(Int, est_output.true_log_lkl))", subplot_titles)
     s = length(est_output.fitted_log_lkl_list) + 1
     fig = PlotlyJS.make_subplots(
-		rows = 1, cols = s,
-		subplot_titles = reshape(subplot_titles, 1, s),
-		shared_yaxes = "rows",
-		shared_xaxes = "columns"
+        rows=1, cols=s,
+        subplot_titles=reshape(subplot_titles, 1, s),
+        shared_yaxes="rows",
+        shared_xaxes="columns"
     )
 
     # ------------------------------------------------------------------
     # true model
     model_params = get_model_params(
         est_output;
-        type = "simulation"
+        type="simulation"
     )
     true_heat_trace = rho_trace(
         sim_hyper.covariate_tup[rho_type == "initial" ? :initial : :trans],
         model_params[rho_type == "initial" ? :rho_initial : :rho_trans]
     )
-	add_trace!(fig, true_heat_trace, row = 1, col = 1)
+    add_trace!(fig, true_heat_trace, row=1, col=1)
 
     # loop through all multistarts
     for (val, idx) in enumerate(lkl_idx)
         model_params = get_model_params(
             est_output;
-            type = idx
+            type=idx
         )
         heat_trace = rho_trace(
             sim_hyper.covariate_tup[rho_type == "initial" ? :initial : :trans],
             model_params[rho_type == "initial" ? :rho_initial : :rho_trans]
         )
-		add_trace!(fig, heat_trace, row = 1, col = val + 1)
+        add_trace!(fig, heat_trace, row=1, col=val + 1)
     end
     set_all_xranges!(fig, -2, 2)
 
-	relayout!(fig, width = 700 * s, height = 500)
+    relayout!(fig, width=700 * s, height=500)
 
     if !isnothing(save_dir)
         open(save_dir, "w") do io
@@ -671,9 +669,9 @@ end
 
 function run_simulation_from_estimation(
     est_output::EstimationOutput;
-    simulation_seed::Integer = 1,
-    T::Integer = 5,
-    type::AbstractString = "best_fitted",
+    simulation_seed::Integer=1,
+    T::Integer=5,
+    type::AbstractString="best_fitted",
 )
     # unpack (keep names explicit for clarity)
     sim_output, sim_params, sim_hyper = unpack(est_output)
@@ -685,22 +683,22 @@ function run_simulation_from_estimation(
     covariate_df = DataFrame(sim_params.covariate_mat, sim_params.covariate_mat_headers)
 
     # pull model params from estimation
-    model_params = get_model_params(est_output; type = type)
+    model_params = get_model_params(est_output; type=type)
 
     # simulate!
     states, observations = simulate(
-        ; model_params = model_params,
-          covariate_df = covariate_df,
-          covariate_tup = sim_params.sim_hyper.covariate_tup, # uses sim_params' hyper
-          T = T
+        ; model_params=model_params,
+        covariate_df=covariate_df,
+        covariate_tup=sim_params.sim_hyper.covariate_tup, # uses sim_params' hyper
+        T=T
     )
 
     # package results
     return SimulationOutput(
-        sim_params = sim_params,
-        simulation_seed = simulation_seed,
-        states = states,
-        observations = observations,
+        sim_params=sim_params,
+        simulation_seed=simulation_seed,
+        states=states,
+        observations=observations,
     )
 end
 
@@ -738,7 +736,7 @@ _subplot_titles(S::Integer, base::AbstractString) =
     [string(base, " (symptom ", s, ")") for s in 1:S]
 
 # --- plotting ---------------------------------------------------------------
-function get_binary_proportions(obs; skip_missing::Bool = true)
+function get_binary_proportions(obs; skip_missing::Bool=true)
     if obs isa AbstractVector{<:AbstractMatrix}
         obs = [replace(M, -1 => missing) for M in obs]
     elseif ndims(obs) == 3
@@ -774,7 +772,7 @@ end
 function create_bernoulli_proportion_plot2(
     estimated_props::AbstractMatrix,
     true_props::AbstractMatrix;
-    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing
 )
     est = estimated_props #_symptom_time(estimated_props)
     tru = true_props # _symptom_time(true_props)
@@ -783,9 +781,9 @@ function create_bernoulli_proportion_plot2(
 
     titles = isnothing(symptom_names) ? _subplot_titles(S, "Bernoulli proportion") :
              symptom_names#[string("Bernoulli proportion — ", n) for n in symptom_names]
-    print(length([string(t) for t in titles]),  " S ", S)
+    print(length([string(t) for t in titles]), " S ", S)
     titles = reshape([string(t) for t in titles], S, 1)
-    
+
     nrows = cld(S, 3)
     plt = make_subplots(rows=nrows, cols=3; shared_xaxes=true, vertical_spacing=0.02, horizontal_spacing=0.02, subplot_titles=titles)
     xs = collect(1:T)
@@ -824,7 +822,7 @@ end
 function create_bernoulli_proportion_plot_fup(
     estimated_props::AbstractMatrix,
     true_props::AbstractMatrix;
-    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing
 )
     est = estimated_props #_symptom_time(estimated_props)
     tru = true_props # _symptom_time(true_props)
@@ -876,7 +874,7 @@ end
 function create_bernoulli_proportion_plot_monthly(
     estimated_props::AbstractMatrix,
     true_props::AbstractMatrix;
-    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing
 )
     est = estimated_props #_symptom_time(estimated_props)
     tru = true_props # _symptom_time(true_props)
@@ -918,7 +916,7 @@ end
 function create_gaussian_mean_plot(
     estimated_gauss,
     true_gauss;
-    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing
 )
     estM = gaussian_means_by_symptom_time(estimated_gauss)  # S × T
     truM = gaussian_means_by_symptom_time(true_gauss)       # S × T
@@ -936,8 +934,8 @@ function create_gaussian_mean_plot(
         add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(truM[s, :]), mode="lines+markers", name=(s==1 ? "True mean" : "True mean (s$s)")); row=s, col=1)
         add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(estM[s, :]), mode="lines+markers", name=(s==1 ? "Estimated mean" : "Estimated mean (s$s)")); row=s, col=1)
         relayout!(plt;
-			Symbol("yaxis$(s)") => attr(title = "Mean"),
-			Symbol("xaxis$(s)") => attr(title = (s == S ? "time" : ""))  # only bottom row gets x-title
+            Symbol("yaxis$(s)") => attr(title="Mean"),
+            Symbol("xaxis$(s)") => attr(title=(s == S ? "time" : ""))  # only bottom row gets x-title
         )
     end
 
@@ -950,30 +948,30 @@ end
 
 function compare_estimation_2_data(
     est_output::EstimationOutput;
-    simulation_seed::Integer = 1,
-    T::Integer = 5,
-    type::AbstractString = "best_fitted",
-    observation_type::AbstractString = "bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing
+    simulation_seed::Integer=1,
+    T::Integer=5,
+    type::AbstractString="best_fitted",
+    observation_type::AbstractString="bernoulli",
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing
 )
     estimated_sim_output = run_simulation_from_estimation(
         est_output;
-        simulation_seed = simulation_seed,
-        T = T,
-        type = type
+        simulation_seed=simulation_seed,
+        T=T,
+        type=type
     )
 
     fig = if observation_type == "bernoulli"
         # proportions over time (S × T expected after _symptom_time)
         estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
-        true_props      = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
-        create_bernoulli_proportion_plot2(estimated_props, true_props; symptom_names = symptom_names)
+        true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
+        create_bernoulli_proportion_plot2(estimated_props, true_props; symptom_names=symptom_names)
 
     elseif observation_type == "gaussian"
         # per-time means (one subplot per symptom)
-        est_gauss  = estimated_sim_output.observations.gaussian_observations
+        est_gauss = estimated_sim_output.observations.gaussian_observations
         true_gauss = est_output.sim_output.observations.gaussian_observations
-        create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names = symptom_names)
+        create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names=symptom_names)
 
     else
         error("Unknown observation type: $observation_type (use \"bernoulli\" or \"gaussian\")")
@@ -985,30 +983,30 @@ end
 
 function compare_estimation_2_data_fup(
     est_output::EstimationOutput;
-    simulation_seed::Integer = 1,
-    T::Integer = 5,
-    type::AbstractString = "best_fitted",
-    observation_type::AbstractString = "bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing
+    simulation_seed::Integer=1,
+    T::Integer=5,
+    type::AbstractString="best_fitted",
+    observation_type::AbstractString="bernoulli",
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing
 )
     estimated_sim_output = run_simulation_from_estimation(
         est_output;
-        simulation_seed = simulation_seed,
-        T = T,
-        type = type
+        simulation_seed=simulation_seed,
+        T=T,
+        type=type
     )
 
     fig = if observation_type == "bernoulli"
         # proportions over time (S × T expected after _symptom_time)
         estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
-        true_props      = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
-        create_bernoulli_proportion_plot_fup(estimated_props, true_props; symptom_names = symptom_names)
+        true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
+        create_bernoulli_proportion_plot_fup(estimated_props, true_props; symptom_names=symptom_names)
 
     elseif observation_type == "gaussian"
         # per-time means (one subplot per symptom)
-        est_gauss  = estimated_sim_output.observations.gaussian_observations
+        est_gauss = estimated_sim_output.observations.gaussian_observations
         true_gauss = est_output.sim_output.observations.gaussian_observations
-        create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names = symptom_names)
+        create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names=symptom_names)
 
     else
         error("Unknown observation type: $observation_type (use \"bernoulli\" or \"gaussian\")")
@@ -1023,8 +1021,8 @@ function summarize_sim_plots(sim_plots; q=0.05)
     T = length(sim_plots[1][1])  # assume consistent
 
     median_props = zeros(S, T)
-    lower_props  = zeros(S, T)
-    upper_props  = zeros(S, T)
+    lower_props = zeros(S, T)
+    upper_props = zeros(S, T)
 
     for s in 1:S
         runs = sim_plots[s]  # Vector of vectors
@@ -1033,8 +1031,8 @@ function summarize_sim_plots(sim_plots; q=0.05)
             vals = [run[t] for run in runs]
 
             median_props[s, t] = median(vals)
-            lower_props[s, t]  = quantile(vals, q/2)
-            upper_props[s, t]  = quantile(vals, 1 - q/2)
+            lower_props[s, t] = quantile(vals, q/2)
+            upper_props[s, t] = quantile(vals, 1 - q/2)
         end
     end
 
@@ -1044,10 +1042,10 @@ end
 
 function compare_estimation_2_data_with_CIs(
     est_output::EstimationOutput;
-    T::Integer = 5,
-    type::AbstractString = "best_fitted",
-    observation_type::AbstractString = "bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing
+    T::Integer=5,
+    type::AbstractString="best_fitted",
+    observation_type::AbstractString="bernoulli",
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing
 )
     # plt = make_subplots(rows=4, cols=3; shared_xaxes=true, vertical_spacing=0.06, subplot_titles=symptom_names)
     sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
@@ -1055,22 +1053,22 @@ function compare_estimation_2_data_with_CIs(
     for simulation_seed in 1:10
         estimated_sim_output = run_simulation_from_estimation(
             est_output;
-            simulation_seed = simulation_seed,
-            T = T,
-            type = type
+            simulation_seed=simulation_seed,
+            T=T,
+            type=type
         )
 
         fig = if observation_type == "bernoulli"
             # proportions over time (S × T expected after _symptom_time)
             estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
-            true_props      = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
-            create_bernoulli_proportion_plot2(estimated_props, true_props; symptom_names = symptom_names)
+            true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
+            create_bernoulli_proportion_plot2(estimated_props, true_props; symptom_names=symptom_names)
 
         elseif observation_type == "gaussian"
             # per-time means (one subplot per symptom)
-            est_gauss  = estimated_sim_output.observations.gaussian_observations
+            est_gauss = estimated_sim_output.observations.gaussian_observations
             true_gauss = est_output.sim_output.observations.gaussian_observations
-            create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names = symptom_names)
+            create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names=symptom_names)
 
         else
             error("Unknown observation type: $observation_type (use \"bernoulli\" or \"gaussian\")")
@@ -1078,7 +1076,7 @@ function compare_estimation_2_data_with_CIs(
         for symptom in 1:length(symptom_names)
             push!(sim_plots[symptom], fig.plot.data[3*symptom][:y])
             if simulation_seed == 1
-                push!(true_plots[symptom], fig.plot.data[3*symptom - 2][:y])
+                push!(true_plots[symptom], fig.plot.data[3*symptom-2][:y])
             end
         end
     end
@@ -1086,7 +1084,7 @@ function compare_estimation_2_data_with_CIs(
 
     median, lower, upper = summarize_sim_plots(sim_plots; q=0.05)
 
-    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names = symptom_names)
+    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names=symptom_names)
 
     return fig
 
@@ -1094,10 +1092,10 @@ end
 
 function compare_estimation_2_data_with_CIs_fup(
     est_output::EstimationOutput;
-    T::Integer = 5,
-    type::AbstractString = "best_fitted",
-    observation_type::AbstractString = "bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing
+    T::Integer=5,
+    type::AbstractString="best_fitted",
+    observation_type::AbstractString="bernoulli",
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing
 )
     # plt = make_subplots(rows=4, cols=3; shared_xaxes=true, vertical_spacing=0.06, subplot_titles=symptom_names)
     sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
@@ -1105,22 +1103,22 @@ function compare_estimation_2_data_with_CIs_fup(
     for simulation_seed in 1:10
         estimated_sim_output = run_simulation_from_estimation(
             est_output;
-            simulation_seed = simulation_seed,
-            T = T,
-            type = type
+            simulation_seed=simulation_seed,
+            T=T,
+            type=type
         )
 
         fig = if observation_type == "bernoulli"
             # proportions over time (S × T expected after _symptom_time)
             estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
-            true_props      = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
-            create_bernoulli_proportion_plot_fup(estimated_props, true_props; symptom_names = symptom_names)
+            true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
+            create_bernoulli_proportion_plot_fup(estimated_props, true_props; symptom_names=symptom_names)
 
         elseif observation_type == "gaussian"
             # per-time means (one subplot per symptom)
-            est_gauss  = estimated_sim_output.observations.gaussian_observations
+            est_gauss = estimated_sim_output.observations.gaussian_observations
             true_gauss = est_output.sim_output.observations.gaussian_observations
-            create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names = symptom_names)
+            create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names=symptom_names)
 
         else
             error("Unknown observation type: $observation_type (use \"bernoulli\" or \"gaussian\")")
@@ -1128,7 +1126,7 @@ function compare_estimation_2_data_with_CIs_fup(
         for symptom in 1:length(symptom_names)
             push!(sim_plots[symptom], fig.plot.data[6*symptom][:y])
             if simulation_seed == 1
-                push!(true_plots[symptom], fig.plot.data[6*symptom - 5][:y])
+                push!(true_plots[symptom], fig.plot.data[6*symptom-5][:y])
             end
         end
     end
@@ -1136,7 +1134,7 @@ function compare_estimation_2_data_with_CIs_fup(
 
     median, lower, upper = summarize_sim_plots(sim_plots; q=0.05)
 
-    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names = symptom_names)
+    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names=symptom_names)
 
     return fig
 
@@ -1144,10 +1142,10 @@ end
 
 function compare_estimation_2_data_with_CIs_monthly(
     est_output::EstimationOutput;
-    T::Integer = 5,
-    type::AbstractString = "best_fitted",
-    observation_type::AbstractString = "bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing
+    T::Integer=5,
+    type::AbstractString="best_fitted",
+    observation_type::AbstractString="bernoulli",
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing
 )
     sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
     true_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
@@ -1155,22 +1153,22 @@ function compare_estimation_2_data_with_CIs_monthly(
     for simulation_seed in 1:10
         estimated_sim_output = run_simulation_from_estimation(
             est_output;
-            simulation_seed = simulation_seed,
-            T = T,
-            type = type
+            simulation_seed=simulation_seed,
+            T=T,
+            type=type
         )
 
         fig = if observation_type == "bernoulli"
             # proportions over time (S × T expected after _symptom_time)
             estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
-            true_props      = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
-            create_bernoulli_proportion_plot_monthly(estimated_props, true_props; symptom_names = symptom_names)
+            true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
+            create_bernoulli_proportion_plot_monthly(estimated_props, true_props; symptom_names=symptom_names)
 
         elseif observation_type == "gaussian"
             # per-time means (one subplot per symptom)
-            est_gauss  = estimated_sim_output.observations.gaussian_observations
+            est_gauss = estimated_sim_output.observations.gaussian_observations
             true_gauss = est_output.sim_output.observations.gaussian_observations
-            create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names = symptom_names)
+            create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names=symptom_names)
 
         else
             error("Unknown observation type: $observation_type (use \"bernoulli\" or \"gaussian\")")
@@ -1178,16 +1176,16 @@ function compare_estimation_2_data_with_CIs_monthly(
         for symptom in 1:n_symptoms
             push!(sim_plots[symptom], fig.plot.data[2*symptom][:y])
             if simulation_seed == 1
-                push!(true_plots[symptom], fig.plot.data[2*symptom - 1][:y])
+                push!(true_plots[symptom], fig.plot.data[2*symptom-1][:y])
             end
         end
     end
-    
+
     true_props_mat = reduce(vcat, [tp[1]' for tp in true_plots])
 
     median, lower, upper = summarize_sim_plots(sim_plots; q=0.05)
 
-    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names = symptom_names)
+    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names=symptom_names)
 
     return fig
 
@@ -1198,8 +1196,8 @@ function plot_median_and_CI(
     lower_props::AbstractMatrix,
     upper_props::AbstractMatrix,
     true_props::AbstractMatrix;
-    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing,
-    quantile::Float64 = 0.05
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    quantile::Float64=0.05
 )
     @assert size(median_props) == size(true_props)
     @assert size(lower_props) == size(true_props)
@@ -1208,8 +1206,8 @@ function plot_median_and_CI(
     S, T = size(true_props)
 
     titles = isnothing(symptom_names) ?
-        ["Bernoulli proportion $s" for s in 1:S] :
-        symptom_names
+             ["Bernoulli proportion $s" for s in 1:S] :
+             symptom_names
 
     titles = reshape(string.(titles), S, 1)
 
@@ -1231,49 +1229,55 @@ function plot_median_and_CI(
 
         # upper CI
         add_trace!(plt, PlotlyJS.scatter(
-            x=xs,
-            y=vec(upper_props[s, :]),
-            mode="lines",
-            line=attr(width=0),
-            showlegend=false,
-            name="Upper CI"
-        ); row=row, col=col)
+                x=xs,
+                y=vec(upper_props[s, :]),
+                mode="lines",
+                line=attr(width=0),
+                showlegend=false,
+                name="Upper CI"
+            ); row=row, col=col)
 
         # lower CI + shaded fill
         add_trace!(plt, PlotlyJS.scatter(
-            x=xs,
-            y=vec(lower_props[s, :]),
-            mode="lines",
-            line=attr(width=0),
-            fill="tonexty",
-            fillcolor="rgba(255,0,0,0.2)",
-            name=(s == 1 ? string((1-quantile)*100) * "% CI" : ""),
-            showlegend=(s == 1)
-        ); row=row, col=col)
+                x=xs,
+                y=vec(lower_props[s, :]),
+                mode="lines",
+                line=attr(width=0),
+                fill="tonexty",
+                fillcolor="rgba(255,0,0,0.2)",
+                name=(s == 1 ? string((1-quantile)*100) * "% CI" : ""),
+                showlegend=(s == 1)
+            ); row=row, col=col)
 
         # median estimate
         add_trace!(plt, PlotlyJS.scatter(
-            x=xs,
-            y=vec(median_props[s, :]),
-            mode="lines+markers",
-            line=attr(color="red"),
-            name=(s == 1 ? "Median estimate" : ""),
-            showlegend=(s == 1)
-        ); row=row, col=col)
+                x=xs,
+                y=vec(median_props[s, :]),
+                mode="lines+markers",
+                line=attr(color="red"),
+                name=(s == 1 ? "Median estimate" : ""),
+                showlegend=(s == 1)
+            ); row=row, col=col)
 
         # true values
         add_trace!(plt, PlotlyJS.scatter(
-            x=xs,
-            y=vec(true_props[s, :]),
-            mode="lines+markers",
-            line=attr(color="blue"),
-            name=(s == 1 ? "True" : ""),
-            showlegend=(s == 1)
-        ); row=row, col=col)
+                x=xs,
+                y=vec(true_props[s, :]),
+                mode="lines+markers",
+                line=attr(color="blue"),
+                name=(s == 1 ? "True" : ""),
+                showlegend=(s == 1)
+            ); row=row, col=col)
 
         relayout!(plt;
-            Symbol("yaxis$(s)") => attr(title="Percentage Frequency"),
-            Symbol("xaxis$(s)") => attr(title=(row == nrows ? "time" : ""))
+            Symbol("yaxis$(s)") => attr(
+                title=col == 1 ? "Percentage Frequency" : "",
+                titlefont=attr(size=14)
+            ),
+            Symbol("xaxis$(s)") => attr(
+                title=(row == nrows ? "time" : ""),
+                titlefont=attr(size=14)
+            )
         )
     end
 
@@ -1281,20 +1285,132 @@ function plot_median_and_CI(
         title="Observed vs Estimated Bernoulli Proportions",
         legend_title_text="Series",
         height=300 + 200 * nrows,
-        width=2000
+        width=2000,)
+
+    return plt
+end
+
+# Qualitative palette (Plotly "Set2"-like), reused/cycled across series.
+const _ensemble_palette = [
+    "rgb(228,26,28)", "rgb(55,126,184)", "rgb(77,175,74)", "rgb(152,78,163)",
+    "rgb(255,127,0)", "rgb(166,86,40)", "rgb(247,129,191)", "rgb(153,153,153)"
+]
+
+function plot_median_and_CI_combined(
+    results::AbstractVector;
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    quantile::Float64=0.05,
+    title::AbstractString="Observed vs Estimated Bernoulli Proportions by Number of States"
+)
+    @assert !isempty(results)
+    S, T = size(results[1].true_props)
+    for res in results
+        @assert size(res.median) == (S, T)
+        @assert size(res.lower) == (S, T)
+        @assert size(res.upper) == (S, T)
+        @assert size(res.true_props) == (S, T)
+    end
+
+    titles = isnothing(symptom_names) ?
+             ["Bernoulli proportion $s" for s in 1:S] :
+             symptom_names
+
+    titles = reshape(string.(titles), S, 1)
+
+    nrows = cld(S, 3)
+    plt = make_subplots(
+        rows=nrows,
+        cols=3;
+        shared_xaxes=true,
+        vertical_spacing=0.02,
+        horizontal_spacing=0.02,
+        subplot_titles=titles
+    )
+
+    for ann in plt.plot.layout.annotations
+        ann.font = attr(size=36)
+    end
+    xs = collect(1:T)
+
+    for s in 1:S
+        row = div(s - 1, 3) + 1
+        col = mod(s - 1, 3) + 1
+
+        # true values (identical across results, plotted once)
+        add_trace!(plt, PlotlyJS.scatter(
+                x=xs,
+                y=vec(results[1].true_props[s, :]),
+                mode="lines+markers",
+                line=attr(color="black", dash="dot"),
+                name=(s == 1 ? "True" : ""),
+                showlegend=(s == 1)
+            ); row=row, col=col)
+
+        for (i, res) in enumerate(results)
+            color = _ensemble_palette[mod1(i, length(_ensemble_palette))]
+            fillcolor = replace(color, "rgb(" => "rgba(", ")" => ",0.15)")
+
+            # upper CI
+            add_trace!(plt, PlotlyJS.scatter(
+                    x=xs,
+                    y=vec(res.upper[s, :]),
+                    mode="lines",
+                    line=attr(width=0),
+                    showlegend=false,
+                    name="Upper CI"
+                ); row=row, col=col)
+
+            # lower CI + shaded fill
+            add_trace!(plt, PlotlyJS.scatter(
+                    x=xs,
+                    y=vec(res.lower[s, :]),
+                    mode="lines",
+                    line=attr(width=0),
+                    fill="tonexty",
+                    fillcolor=fillcolor,
+                    showlegend=(s == 1 && i == 1),
+                    name=string((1 - quantile) * 100) * "% CI"
+                ); row=row, col=col)
+
+            # median estimate
+            add_trace!(plt, PlotlyJS.scatter(
+                    x=xs,
+                    y=vec(res.median[s, :]),
+                    mode="lines+markers",
+                    line=attr(color=color),
+                    name=(s == 1 ? res.label : ""),
+                    showlegend=(s == 1)
+                ); row=row, col=col)
+        end
+
+        relayout!(plt;
+            Symbol("yaxis$(s)") => attr(
+                title=col == 1 ? "Percentage Frequency" : "",
+                titlefont=attr(size=28)
+            ),
+            Symbol("xaxis$(s)") => attr(
+                title=(row == 6 ? "Time" : ""),
+                titlefont=attr(size=28)
+            ))
+    end
+
+    relayout!(plt,
+        height=300 + 500 * nrows,
+        width=3200,
+        font=attr(size=28)
     )
 
     return plt
 end
 
 function plot_transition_matrices(beta_transition::Array{<:Real}, range::AbstractRange{Float64})
-    
+
     n = length(range)  # Anzahl der Steps
-    
+
     # z.B. cols fix, rows berechnen
     cols = 3
     rows = ceil(Int, n / cols)
-    
+
     fig_trans_covs = PlotlyJS.make_subplots(rows=rows, cols=cols, horizontal_spacing=0.06, vertical_spacing=0.06)
 
     for (i, sig) in enumerate(range)
@@ -1311,11 +1427,11 @@ end
 
 function plot_initial_probs(beta_initial::Array{<:Real}, range::AbstractRange{Float64})
     n = length(range)  # Anzahl der Steps
-    
+
     # z.B. cols fix, rows berechnen
     cols = 3
     rows = ceil(Int, n / cols)
-    
+
     fig_initials_covs = PlotlyJS.make_subplots(
         rows=rows, cols=cols, horizontal_spacing=0.1, vertical_spacing=0.1
     )
@@ -1340,7 +1456,7 @@ function extract_rtrans_range(rho_vec, x_vec)
     end
     lo = minimum(aggr_vals)#floor(minimum(aggr_vals))
     hi = maximum(aggr_vals)#ceil(maximum(aggr_vals))
-    step = (hi - lo )/5
+    step = (hi - lo)/5
     println("Aggregated covariate values range from $lo to $hi")
     return lo:step:hi
 end
@@ -1357,10 +1473,10 @@ end
 
 function ensemble_uq_fup(
     est_output::EstimationOutput;
-    T::Integer = 5,
-    observation_type::AbstractString = "bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing,
-    num_multistarts::Integer = 10
+    T::Integer=5,
+    observation_type::AbstractString="bernoulli",
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    num_multistarts::Integer=10
 )
 
     lkl_idx = sortperm(est_output.fitted_log_lkl_list)
@@ -1368,26 +1484,26 @@ function ensemble_uq_fup(
     sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
     true_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
     for multistart in 1:num_multistarts
-        
+
         for simulation_seed in 1:10
             estimated_sim_output = run_simulation_from_model_params(
                 est_output;
-                simulation_seed = simulation_seed,
-                T = T,
+                simulation_seed=simulation_seed,
+                T=T,
                 model_params=est_output.fitted_model_params[lkl_idx][multistart]
             )
 
             fig = if observation_type == "bernoulli"
                 # proportions over time (S × T expected after _symptom_time)
                 estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
-                true_props      = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
-                create_bernoulli_proportion_plot_fup(estimated_props, true_props; symptom_names = symptom_names)
+                true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
+                create_bernoulli_proportion_plot_fup(estimated_props, true_props; symptom_names=symptom_names)
 
             elseif observation_type == "gaussian"
                 # per-time means (one subplot per symptom)
-                est_gauss  = estimated_sim_output.observations.gaussian_observations
+                est_gauss = estimated_sim_output.observations.gaussian_observations
                 true_gauss = est_output.sim_output.observations.gaussian_observations
-                create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names = symptom_names)
+                create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names=symptom_names)
 
             else
                 error("Unknown observation type: $observation_type (use \"bernoulli\" or \"gaussian\")")
@@ -1395,7 +1511,7 @@ function ensemble_uq_fup(
             for symptom in 1:length(symptom_names)
                 push!(sim_plots[symptom], fig.plot.data[6*symptom][:y])
                 if simulation_seed == 1
-                    push!(true_plots[symptom], fig.plot.data[6*symptom - 5][:y])
+                    push!(true_plots[symptom], fig.plot.data[6*symptom-5][:y])
                 end
             end
         end
@@ -1404,46 +1520,47 @@ function ensemble_uq_fup(
 
     median, lower, upper = summarize_sim_plots(sim_plots; q=0.05)
 
-    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names = symptom_names)
+    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names=symptom_names)
 
     return fig
 
 end
 
-function ensemble_uq_monthly(
+function ensemble_uq_monthly_stats(
     est_output::EstimationOutput;
-    T::Integer = 5,
-    observation_type::AbstractString = "bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing,
-    num_multistarts::Integer = 10,
-    quantile::Float64 = 0.05
+    T::Integer=5,
+    observation_type::AbstractString="bernoulli",
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    quantile::Float64=0.05
 )
 
     lkl_idx = sortperm(est_output.fitted_log_lkl_list)
-    # plt = make_subplots(rows=4, cols=3; shared_xaxes=true, vertical_spacing=0.06, subplot_titles=symptom_names)
     sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
     true_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
+    num_multistarts = length(est_output.fitted_model_params[lkl_idx])
+    println(est_output.fitted_log_lkl_list)
+    num_multistarts=10
     for multistart in 1:num_multistarts
-        
+
         for simulation_seed in 1:10
             estimated_sim_output = run_simulation_from_model_params(
                 est_output;
-                simulation_seed = simulation_seed,
-                T = T,
+                simulation_seed=simulation_seed,
+                T=T,
                 model_params=est_output.fitted_model_params[lkl_idx][multistart]
             )
 
             fig = if observation_type == "bernoulli"
                 # proportions over time (S × T expected after _symptom_time)
                 estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
-                true_props      = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
-                create_bernoulli_proportion_plot_monthly(estimated_props, true_props; symptom_names = symptom_names)
+                true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
+                create_bernoulli_proportion_plot_monthly(estimated_props, true_props; symptom_names=symptom_names)
 
             elseif observation_type == "gaussian"
                 # per-time means (one subplot per symptom)
-                est_gauss  = estimated_sim_output.observations.gaussian_observations
+                est_gauss = estimated_sim_output.observations.gaussian_observations
                 true_gauss = est_output.sim_output.observations.gaussian_observations
-                create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names = symptom_names)
+                create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names=symptom_names)
 
             else
                 error("Unknown observation type: $observation_type (use \"bernoulli\" or \"gaussian\")")
@@ -1451,7 +1568,7 @@ function ensemble_uq_monthly(
             for symptom in 1:length(symptom_names)
                 push!(sim_plots[symptom], fig.plot.data[2*symptom][:y])
                 if simulation_seed == 1
-                    push!(true_plots[symptom], fig.plot.data[2*symptom - 1][:y])
+                    push!(true_plots[symptom], fig.plot.data[2*symptom-1][:y])
                 end
             end
         end
@@ -1460,19 +1577,103 @@ function ensemble_uq_monthly(
 
     median, lower, upper = summarize_sim_plots(sim_plots; q=quantile)
 
-    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names = symptom_names, quantile=quantile)
+    return median, lower, upper, true_props_mat
+end
+
+function ensemble_uq_monthly(
+    est_output::EstimationOutput;
+    T::Integer=5,
+    observation_type::AbstractString="bernoulli",
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    quantile::Float64=0.05
+)
+
+    median, lower, upper, true_props_mat = ensemble_uq_monthly_stats(
+        est_output;
+        T=T,
+        observation_type=observation_type,
+        symptom_names=symptom_names,
+        quantile=quantile
+    )
+
+    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names=symptom_names, quantile=quantile)
 
     return fig
 
 end
 
+
+function ensemble_uq_monthly_return_traces(
+    est_output::EstimationOutput;
+    T::Integer=5,
+    observation_type::AbstractString="bernoulli",
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    num_multistarts::Integer=10,
+    quantile::Float64=0.05
+)
+    all_params = est_output.all_model_params
+
+    x = 0
+    for multistart in 1:length(all_params)
+        for params in all_params[multistart]
+            lkl = lkl_func(; model_params=params, sim_output=est_output.sim_output)
+            println(lkl)
+        end
+    end
+
+    lkl_idx = sortperm(est_output.fitted_log_lkl_list)
+    # plt = make_subplots(rows=4, cols=3; shared_xaxes=true, vertical_spacing=0.06, subplot_titles=symptom_names)
+    sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
+    true_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
+    for multistart in 1:num_multistarts
+
+        # for simulation_seed in 1:10
+        estimated_sim_output = run_simulation_from_model_params(
+            est_output;
+            simulation_seed=1,
+            T=T,
+            model_params=est_output.fitted_model_params[lkl_idx][multistart]
+        )
+
+        fig = if observation_type == "bernoulli"
+            # proportions over time (S × T expected after _symptom_time)
+            estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
+            true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
+            create_bernoulli_proportion_plot_monthly(estimated_props, true_props; symptom_names=symptom_names)
+
+        elseif observation_type == "gaussian"
+            # per-time means (one subplot per symptom)
+            est_gauss = estimated_sim_output.observations.gaussian_observations
+            true_gauss = est_output.sim_output.observations.gaussian_observations
+            create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names=symptom_names)
+
+        else
+            error("Unknown observation type: $observation_type (use \"bernoulli\" or \"gaussian\")")
+        end
+        for symptom in 1:length(symptom_names)
+            push!(sim_plots[symptom], fig.plot.data[2*symptom][:y])
+            # if simulation_seed == 1
+            push!(true_plots[symptom], fig.plot.data[2*symptom-1][:y])
+            # end
+        end
+        # end
+    end
+    true_props_mat = reduce(vcat, [tp[1]' for tp in true_plots])
+
+    median, lower, upper = summarize_sim_plots(sim_plots; q=quantile)
+
+    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names=symptom_names, quantile=quantile)
+
+    return fig
+end
+
 function ensemble_uq_monthly_startingparams(
     est_output::EstimationOutput;
-    T::Integer = 5,
-    observation_type::AbstractString = "bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing,
-    num_multistarts::Integer = 10,
-    quantile::Float64 = 0.05
+    T::Integer=5,
+    observation_type::AbstractString="bernoulli",
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    num_multistarts::Integer=10,
+    quantile::Float64=0.05
 )
 
     lkl_idx = sortperm(est_output.fitted_log_lkl_list)
@@ -1480,26 +1681,26 @@ function ensemble_uq_monthly_startingparams(
     sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
     true_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
     for multistart in 1:num_multistarts
-        
+
         for simulation_seed in 1:10
             estimated_sim_output = run_simulation_from_model_params(
                 est_output;
-                simulation_seed = simulation_seed,
-                T = T,
+                simulation_seed=simulation_seed,
+                T=T,
                 model_params=est_output.starting_model_params[lkl_idx][multistart]
             )
 
             fig = if observation_type == "bernoulli"
                 # proportions over time (S × T expected after _symptom_time)
                 estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
-                true_props      = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
-                create_bernoulli_proportion_plot_monthly(estimated_props, true_props; symptom_names = symptom_names)
+                true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
+                create_bernoulli_proportion_plot_monthly(estimated_props, true_props; symptom_names=symptom_names)
 
             elseif observation_type == "gaussian"
                 # per-time means (one subplot per symptom)
-                est_gauss  = estimated_sim_output.observations.gaussian_observations
+                est_gauss = estimated_sim_output.observations.gaussian_observations
                 true_gauss = est_output.sim_output.observations.gaussian_observations
-                create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names = symptom_names)
+                create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names=symptom_names)
 
             else
                 error("Unknown observation type: $observation_type (use \"bernoulli\" or \"gaussian\")")
@@ -1507,7 +1708,7 @@ function ensemble_uq_monthly_startingparams(
             for symptom in 1:length(symptom_names)
                 push!(sim_plots[symptom], fig.plot.data[2*symptom][:y])
                 if simulation_seed == 1
-                    push!(true_plots[symptom], fig.plot.data[2*symptom - 1][:y])
+                    push!(true_plots[symptom], fig.plot.data[2*symptom-1][:y])
                 end
             end
         end
@@ -1516,7 +1717,7 @@ function ensemble_uq_monthly_startingparams(
 
     median, lower, upper = summarize_sim_plots(sim_plots; q=quantile)
 
-    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names = symptom_names, quantile=quantile)
+    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names=symptom_names, quantile=quantile)
 
     return fig
 
@@ -1524,10 +1725,10 @@ end
 
 function ensemble_uq(
     est_output::EstimationOutput;
-    T::Integer = 5,
-    observation_type::AbstractString = "bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}} = nothing,
-    num_multistarts::Integer = 10
+    T::Integer=5,
+    observation_type::AbstractString="bernoulli",
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    num_multistarts::Integer=10
 )
 
     lkl_idx = sortperm(est_output.fitted_log_lkl_list)
@@ -1535,26 +1736,26 @@ function ensemble_uq(
     sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
     true_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
     for multistart in 1:num_multistarts
-        
+
         for simulation_seed in 1:10
             estimated_sim_output = run_simulation_from_model_params(
                 est_output;
-                simulation_seed = simulation_seed,
-                T = T,
+                simulation_seed=simulation_seed,
+                T=T,
                 model_params=est_output.fitted_model_params[lkl_idx][multistart]
             )
 
             fig = if observation_type == "bernoulli"
                 # proportions over time (S × T expected after _symptom_time)
                 estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
-                true_props      = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
-                create_bernoulli_proportion_plot2(estimated_props, true_props; symptom_names = symptom_names)
+                true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
+                create_bernoulli_proportion_plot2(estimated_props, true_props; symptom_names=symptom_names)
 
             elseif observation_type == "gaussian"
                 # per-time means (one subplot per symptom)
-                est_gauss  = estimated_sim_output.observations.gaussian_observations
+                est_gauss = estimated_sim_output.observations.gaussian_observations
                 true_gauss = est_output.sim_output.observations.gaussian_observations
-                create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names = symptom_names)
+                create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names=symptom_names)
 
             else
                 error("Unknown observation type: $observation_type (use \"bernoulli\" or \"gaussian\")")
@@ -1562,7 +1763,7 @@ function ensemble_uq(
             for symptom in 1:length(symptom_names)
                 push!(sim_plots[symptom], fig.plot.data[3*symptom][:y])
                 if simulation_seed == 1
-                    push!(true_plots[symptom], fig.plot.data[3*symptom - 2][:y])
+                    push!(true_plots[symptom], fig.plot.data[3*symptom-2][:y])
                 end
             end
         end
@@ -1571,7 +1772,7 @@ function ensemble_uq(
 
     median, lower, upper = summarize_sim_plots(sim_plots; q=0.05)
 
-    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names = symptom_names)
+    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names=symptom_names)
 
     return fig
 
@@ -1579,9 +1780,9 @@ end
 
 function run_simulation_from_model_params(
     est_output::EstimationOutput;
-    simulation_seed::Integer = 1,
-    T::Integer = 5,
-    model_params::NamedTuple = [],
+    simulation_seed::Integer=1,
+    T::Integer=5,
+    model_params::NamedTuple=[],
 )
     # unpack (keep names explicit for clarity)
     sim_output, sim_params, sim_hyper = unpack(est_output)
@@ -1594,18 +1795,18 @@ function run_simulation_from_model_params(
 
     # simulate!
     states, observations = simulate(
-        ; model_params = model_params,
-          covariate_df = covariate_df,
-          covariate_tup = sim_params.sim_hyper.covariate_tup, # uses sim_params' hyper
-          T = T
+        ; model_params=model_params,
+        covariate_df=covariate_df,
+        covariate_tup=sim_params.sim_hyper.covariate_tup, # uses sim_params' hyper
+        T=T
     )
 
     # package results
     return SimulationOutput(
-        sim_params = sim_params,
-        simulation_seed = simulation_seed,
-        states = states,
-        observations = observations,
+        sim_params=sim_params,
+        simulation_seed=simulation_seed,
+        states=states,
+        observations=observations,
     )
 end
 
@@ -1691,31 +1892,31 @@ end
 
 function estimated_states_over_time(
     est_output::EstimationOutput;
-    simulation_seed::Integer = 1,
-    T::Integer = 5,
-    type::AbstractString = "best_fitted",
-    n_states::Integer = 3
+    simulation_seed::Integer=1,
+    T::Integer=5,
+    type::AbstractString="best_fitted",
+    n_states::Integer=3
 )
     estimated_sim_output = run_simulation_from_estimation(
         est_output;
-        simulation_seed = simulation_seed,
-        T = T,
-        type = type
+        simulation_seed=simulation_seed,
+        T=T,
+        type=type
     )
 
     M = zeros(Int, T, n_states)
-    
+
     for timepoint in 1:T
         cm = countmap(estimated_sim_output.states[:, timepoint])
         for j in 1:n_states
             M[timepoint, j] = get(cm, j, 0)
         end
     end
-    
+
     fig = areaplot(1:T, M,
-        labels = permutedims(["State " * string(j) for j in 1:n_states]),
-        xlabel = "Timepoint",
-        legend = :outerright)
+        labels=permutedims(["State " * string(j) for j in 1:n_states]),
+        xlabel="Timepoint",
+        legend=:outerright)
 
     return fig
 end

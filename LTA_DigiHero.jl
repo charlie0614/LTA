@@ -10,8 +10,8 @@ using Plots
 ######### PREPROCESSING ##########
 
 sim_dir = "data/DigiHero/"
-n_states = 3
-sim_no = string("2026_07_20/", n_states, "states/age_sex_comorbidity_covs_fups")
+n_states = 10
+sim_no = string("2026_07_20/", n_states, "states/age_sex_comorbidity_covs_fups_all_symptoms")
 combined_all = CSV.read(sim_dir * "2026-07-20_data_symptoms_DigiHero_Bonn_preprocessed.csv", DataFrame, missingstring=["", "NA"]);
 
 println("Running simulation with ", sim_no)
@@ -22,7 +22,7 @@ preprocessed_df = preprocessed_df[:, 3:end]
 
 preprocessed_df = filter(row -> !all(ismissing, row[Not(covariates_list_new_agegroups)]), preprocessed_df)
 
-sim_output = LTA.create_sim_mod_data(preprocessed_df; covs=covariates_list_new_agegroups, bins=symptoms_list_fup, conts=String[], visits=String[], labels=["pcc_" * string(timepoints)*"months_sym_" for timepoints in collect(6:6:30)], n_states=n_states, covariate_tup=(initial=covariates_list_new_agegroups, trans=covariates_list_new_agegroups, em=[]), sim_no=sim_no, comments="")
+sim_output = LTA.create_sim_mod_data(preprocessed_df; covs=covariates_list_new_agegroups, bins=symptoms_list_fup, conts=String[], visits=String[], labels=["pcc_" * string(timepoints) * "months_sym_" for timepoints in collect(6:6:30)], n_states=n_states, covariate_tup=(initial=covariates_list_new_agegroups, trans=covariates_list_new_agegroups, em=[]), sim_no=sim_no, comments="")
 save("outputs/" * sim_no * "/simulation/sim_output.jld2", "sim_output", sim_output)
 
 ############ ESTIMATION #############
@@ -66,8 +66,6 @@ true_heat_trace = LTA.plot_single_bernoulli_probs(em_states; symptom_labels=symp
 add_trace!(fig_em_trans, true_heat_trace, row=1, col=1)
 transition_probs = LTA.get_rho_beta_transition_mat(
     best_model_params.beta_transition, best_model_params.rho_trans, sim_params.covariate_mat[1, :])
-    transition_probs = LTA.get_rho_beta_transition_mat(
-    best_model_params.beta_transition, best_model_params.rho_trans, sim_params.covariate_mat[1, :])
 true_heat_trace = LTA.plot_single_transition_mat(transition_probs)
 add_trace!(fig_em_trans, true_heat_trace, row=1, col=2)#, name="Transition matrix")
 initial_states = LTA.get_rho_beta_initial_states(
@@ -109,7 +107,7 @@ LTA.savefig_auto(fig5, "outputs/" * sim_no * "/results/plots/initial_probs_covs.
 
 
 # Ensemble-based uncertainty quantification 
-fig = LTA.ensemble_uq_monthly(estimation_output; T=5, symptom_names=symptoms_list_fup, observation_type="bernoulli", num_multistarts=15)
+fig = LTA.ensemble_uq_monthly(estimation_output; T=5, symptom_names=symptoms_list_fup, observation_type="bernoulli")
 LTA.savefig_auto(fig, "outputs/" * sim_no * "/results/plots/ensemble_uq.png")
 
 # Ensemble-based uncertainty quantification 

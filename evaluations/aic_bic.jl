@@ -32,10 +32,10 @@ function get_BIC(est_output::LTA.EstimationOutput)
 end
 
 function plot_aic_bic(
-    aic_values::Vector{Float64}, 
+    aic_values::Vector{Float64},
     bic_values::Vector{Float64};
-    labels =  string.(1:length(aic_values))
-    )
+    labels=string.(1:length(aic_values))
+)
     if length(aic_values) != length(bic_values)
         error("The lengths of AIC and BIC values must be the same.")
     end
@@ -46,22 +46,22 @@ function plot_aic_bic(
     max_val = maximum(all_values)
     ylims = (min_val - 0.05 * abs(min_val), max_val + 0.05 * abs(max_val))  # Add some padding for better visibility
 
-        
+
     # Create the bar chart
-    tr_aic = PlotlyJS.bar(x = labels, y = aic_values, name = "AIC", width = 0.35)
-    tr_bic = PlotlyJS.bar(x = labels, y = bic_values, name = "BIC", width = 0.35)
+    tr_aic = PlotlyJS.bar(x=labels, y=aic_values, name="AIC", width=0.35)
+    tr_bic = PlotlyJS.bar(x=labels, y=bic_values, name="BIC", width=0.35)
 
     plt = PlotlyJS.Plot(
         [tr_aic, tr_bic],
         PlotlyJS.Layout(
-            barmode = "group",
-            title = "AIC and BIC Values for Different Models",
-            xaxis = PlotlyJS.attr(title = "Models"),
-            yaxis = PlotlyJS.attr(title = "Value", range = [ylims[1], ylims[2]]),
-            legend = PlotlyJS.attr(x = 0.95, y = 0.95),
-            width = 800,
-            height = 500,
-            bargroupgap = 0.12
+            barmode="group",
+            title="AIC and BIC Values for Different Models",
+            xaxis=PlotlyJS.attr(title="Models"),
+            yaxis=PlotlyJS.attr(title="Value", range=[ylims[1], ylims[2]]),
+            legend=PlotlyJS.attr(x=0.95, y=0.95),
+            width=800,
+            height=500,
+            bargroupgap=0.12
         )
     )
 
@@ -73,9 +73,9 @@ aic_val_list = get_AIC.(est_output_list)
 bic_val_list = get_BIC.(est_output_list)
 
 aic_bic_plt = plot_aic_bic(
-    aic_val_list, 
+    aic_val_list,
     bic_val_list;
-    labels =  ["$i States" for i in n_state_list]
+    labels=["$i States" for i in n_state_list]
 )
 
 PlotlyJS.savefig(aic_bic_plt, sim_dir * "aic_bic_age_sex_comorbidity_covs_fups.png", width=1200, height=800)
