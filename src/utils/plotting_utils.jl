@@ -1530,6 +1530,7 @@ function ensemble_uq_monthly_stats(
     est_output::EstimationOutput;
     T::Integer=5,
     observation_type::AbstractString="bernoulli",
+    num_multistarts::Integer=10,
     symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
     quantile::Float64=0.05
 )
@@ -1537,9 +1538,6 @@ function ensemble_uq_monthly_stats(
     lkl_idx = sortperm(est_output.fitted_log_lkl_list)
     sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
     true_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
-    num_multistarts = length(est_output.fitted_model_params[lkl_idx])
-    println(est_output.fitted_log_lkl_list)
-    num_multistarts=10
     for multistart in 1:num_multistarts
 
         for simulation_seed in 1:10
@@ -1608,31 +1606,45 @@ function ensemble_uq_monthly_return_traces(
     T::Integer=5,
     observation_type::AbstractString="bernoulli",
     symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
-    num_multistarts::Integer=10,
     quantile::Float64=0.05
 )
     all_params = est_output.all_model_params
 
-    x = 0
+    lkl = zeros(length(all_params), length(all_params[1]), 10)  # multistart × params × seed
+    kept_params = []
     for multistart in 1:length(all_params)
-        for params in all_params[multistart]
-            lkl = lkl_func(; model_params=params, sim_output=est_output.sim_output)
-            println(lkl)
+        for (i, params) in enumerate(all_params[multistart])
+            x=0
+            lkl_obs = lkl_func(; model_params=params, sim_output=est_output.sim_output)
+            for seed in 1:10
+                estimated_sim_output = run_simulation_from_model_params(
+                    est_output;
+                    simulation_seed=seed,
+                    T=T,
+                    model_params=params
+                )
+                lkl[multistart, i, seed] = lkl_func(; model_params=params, sim_output=estimated_sim_output)
+                if lkl[multistart, i, seed] > lkl_obs
+                    x+=1
+                end
+            end
+            p = (1+x)/11
+            if p > 0.05
+                push!(kept_params, params)
+            end
         end
     end
 
-    lkl_idx = sortperm(est_output.fitted_log_lkl_list)
-    # plt = make_subplots(rows=4, cols=3; shared_xaxes=true, vertical_spacing=0.06, subplot_titles=symptom_names)
     sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
     true_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
-    for multistart in 1:num_multistarts
+    for params in kept_params
 
         # for simulation_seed in 1:10
         estimated_sim_output = run_simulation_from_model_params(
             est_output;
             simulation_seed=1,
             T=T,
-            model_params=est_output.fitted_model_params[lkl_idx][multistart]
+            model_params=params
         )
 
         fig = if observation_type == "bernoulli"
