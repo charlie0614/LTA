@@ -1610,10 +1610,9 @@ function ensemble_uq_monthly_return_traces(
 )
     all_params = est_output.all_model_params
 
-    lkl = zeros(length(all_params), length(all_params[1]), 10)  # multistart × params × seed
     kept_params = []
     for multistart in 1:length(all_params)
-        for (i, params) in enumerate(all_params[multistart])
+        for params in all_params[multistart]
             x=0
             lkl_obs = lkl_func(; model_params=params, sim_output=est_output.sim_output)
             for seed in 1:10
@@ -1623,8 +1622,8 @@ function ensemble_uq_monthly_return_traces(
                     T=T,
                     model_params=params
                 )
-                lkl[multistart, i, seed] = lkl_func(; model_params=params, sim_output=estimated_sim_output)
-                if lkl[multistart, i, seed] > lkl_obs
+                lkl = lkl_func(; model_params=params, sim_output=estimated_sim_output)
+                if lkl > lkl_obs
                     x+=1
                 end
             end
