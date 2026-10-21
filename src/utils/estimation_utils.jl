@@ -583,7 +583,7 @@ function lkl_func_transmat(;
     model_params::NamedTuple,
     sim_output::SimulationOutput,
 )
-    alpha = populate_forward_threads_transmat(;
+    alpha, n_zeroed = populate_forward_threads_transmat(;
         model_params=model_params,
         sim_output=sim_output,
     )
@@ -591,7 +591,7 @@ function lkl_func_transmat(;
     log_sample_contribution = sum_alpha_across_states_transmat(alpha[:, end, :]) # using the last timepoint
     neg_log_lkl = -sum(log_sample_contribution) # weight it in log space
 
-    return neg_log_lkl
+    return neg_log_lkl, n_zeroed
 
 end
 
@@ -692,7 +692,9 @@ function populate_forward_threads_transmat(;
         )
     end
 
-    alpha_chunks = fetch.(tasks)
+    results = fetch.(tasks)
+    alpha_chunks = first.(results)
+    n_zeroed = reduce(vcat, last.(results))
 
     # recombine
     N = sum(size(ch, 1) for ch in alpha_chunks)
@@ -707,7 +709,7 @@ function populate_forward_threads_transmat(;
         offset += len
     end
 
-    return alpha
+    return alpha, n_zeroed
 end
 
 function precompute_transition(
@@ -730,19 +732,24 @@ end
 function precompute_transition_transmat(
     beta_transition::Array{<:Real},
     rho_param::Vector{<:Real},
-    covariate_mat::Array{<:Union{Missing,Float64}},
+    covariate_mat::Array{<:Union{Missing,Float64}};
+    threshold::Float64=1e-3,
 )
 
-    # precompute the transition matrix of each patient
+    # precompute the transition matrix of each patient, fixing small transitions to 0
     N = size(covariate_mat, 1)
     I = size(beta_transition, 3)
     log_transition_tensor = zeros(eltype(beta_transition), N, I, I)
+    n_zeroed = zeros(Int64, N) # number of transitions fixed to 0 per patient
     for n in 1:N
-        log_transition_tensor[n, :, :] .= get_rho_beta_transition_mat(beta_transition, rho_param, covariate_mat[n, :])
-        log_transition_tensor[n, :, :] = ifelse.(log_transition_tensor[n, :, :] .< 1e-3, 0, log_transition_tensor[n, :, :])
-
+        trans_mat = get_rho_beta_transition_mat(beta_transition, rho_param, covariate_mat[n, :])
+        n_zeroed[n] = count(trans_mat .< threshold)
+        trans_mat = ifelse.(trans_mat .< threshold, zero(eltype(trans_mat)), trans_mat)
+        trans_mat = trans_mat ./ sum(trans_mat, dims=2) # renormalise rows
+        log_transition_tensor[n, :, :] .= trans_mat
     end
-    return log_transition_tensor
+    log_transition_tensor = log.(log_transition_tensor) # log(0) = -Inf, handled by logsumexp
+    return log_transition_tensor, n_zeroed
 end
 
 function populate_forward(;
@@ -850,7 +857,7 @@ function populate_forward_transmat(;
 )
 
     # precompute transition and emission mats (for speed..)
-    log_transition_tensor = precompute_transition_transmat(
+    log_transition_tensor, n_zeroed = precompute_transition_transmat(
         model_params.beta_transition,
         model_params.rho_trans,
         covariate_mat[:, covariate_idx[:trans]],
@@ -893,7 +900,7 @@ function populate_forward_transmat(;
             model_params.beta_initial,
             model_params.rho_initial,
             covariate_mat[n, covariate_idx[:initial]])
-        log_state = initial_states
+        log_state = log.(initial_states)
 
         for i in 1:I
             log_symp_contr = get_probs_from_observable(;
@@ -913,10 +920,10 @@ function populate_forward_transmat(;
             for i in 1:I
 
                 # transition to new states
-                log_trans_prob = transition_state(
+                log_trans_prob = log_space_transition_state(
                     state_no=i,
-                    state_probs=alpha[n, t-1, :],
-                    transition_mat=log_transition_tensor[n, :, :],
+                    log_state_probs=alpha[n, t-1, :],
+                    log_transition_mat=log_transition_tensor[n, :, :],
                     # n_states = I,
                 )
 
@@ -934,7 +941,7 @@ function populate_forward_transmat(;
         end
     end
 
-    return alpha
+    return alpha, n_zeroed
 end
 
 function get_probs_from_observable(;
@@ -1077,6 +1084,7 @@ function log_space_transition_state(;
 
     v = @views log_transition_mat[:, state_no] .+ log_state_probs
     m = maximum(v)
+    isinf(m) && m < 0 && return m # state unreachable (all transitions fixed to 0)
     return m + log(sum(exp.(v .- m)))
 end
 

@@ -19,27 +19,24 @@ function get_likelihood(est_output::LTA.EstimationOutput)
     trans_states = LTA.get_rho_beta_transition_mat(
         best_model_params.beta_transition, best_model_params.rho_trans, sim_params.covariate_mat[1, :])
 
-    lkl = LTA.lkl_func_transmat(model_params=best_model_params, sim_output=sim_output)
-    println("Likelihood: ", lkl)
-    println("Minimum Likelihood: ", minimum(est_output.fitted_log_lkl_list))
-    trans_states_fixed = ifelse.(trans_states .< 1e-3, 0, trans_states)
+    lkl, n_zeroed = LTA.lkl_func_transmat(model_params=best_model_params, sim_output=sim_output)
 
-    # model_params = param_vec_2_model_params(
-    #     params_vec;
-    #     n_states=sim_hyper.n_states,
-    #     n_obs_tup=sim_hyper.n_obs_tup,
-    #     covariate_tup=sim_hyper.covariate_tup
-    # )
-    return trans_states_fixed
+    return lkl, n_zeroed
 
 end
 
 function get_AIC(est_output::LTA.EstimationOutput)
 
     k = length(est_output.fitted_model_params[1])
-    aic = 2 * k + minimum(est_output.fitted_log_lkl_list)
+    aic = 2 * k + 2 * maximum(est_output.fitted_log_lkl_list)
 
     return aic
+end
+
+function get_AIC_fixed(est_output::LTA.EstimationOutput)
+    lkl, zeros = get_likelihood(est_output)
+    k = length(est_output.fitted_model_params[1])
+    aic = 2 * k + 2 * lkl
 end
 
 function get_BIC(est_output::LTA.EstimationOutput)
@@ -90,6 +87,8 @@ end
 lkl_list = get_likelihood.(est_output_list)
 aic_val_list = get_AIC.(est_output_list)
 bic_val_list = get_BIC.(est_output_list)
+
+aic_val_list_new = get_AIC_fixed.(est_output_list)
 
 # aic_bic_plt = plot_aic_bic(
 #     aic_val_list,
