@@ -144,7 +144,7 @@ function compare_trans_heatmaps(
     subplot_titles = vcat("Simulation<br>-Log-lkl:$(round(Int, est_output.true_log_lkl))", subplot_titles)
     s = length(est_output.fitted_log_lkl_list) + 1
     fig = PlotlyJS.make_subplots(
-        rows=7, cols=ceil(Int, s/7),
+        rows=7, cols=ceil(Int, s / 7),
         subplot_titles=reshape(subplot_titles, 1, s)
     )
 
@@ -168,7 +168,7 @@ function compare_trans_heatmaps(
         transition_probs = get_rho_beta_transition_mat(
             model_params.beta_transition, model_params.rho_trans, x_vec[covariate_idx[:trans]])
         heat_trace = plot_single_transition_mat(transition_probs)
-        add_trace!(fig, heat_trace, row=floor(Int, val/ceil(Int, s/7)) + 1, col=val % ceil(Int, s/7)+1)
+        add_trace!(fig, heat_trace, row=floor(Int, val / ceil(Int, s / 7)) + 1, col=val % ceil(Int, s / 7) + 1)
     end
 
     relayout!(fig, width=800 * s, height=250)
@@ -335,7 +335,7 @@ function compare_gaussian_pdf(
                     x_range=x_range,
                     name="State " * string(i)
                 )
-                add_trace!(fig, true_heat_trace, row=i, col=val*sim_hyper.n_obs_tup.gaussian + j)
+                add_trace!(fig, true_heat_trace, row=i, col=val * sim_hyper.n_obs_tup.gaussian + j)
             end
         end
     end
@@ -345,9 +345,9 @@ function compare_gaussian_pdf(
     #     relayout!(fig; Symbol("yaxis$(axis_idx)"*"_range") => ylims)
     # end
 
-    relayout!(fig; Symbol("yaxis"*"_range") => ylims)
+    relayout!(fig; Symbol("yaxis" * "_range") => ylims)
     for axis_idx in 1:(sim_hyper.n_states*(length(lkl_idx)+1)*sim_hyper.n_obs_tup.gaussian*2)
-        relayout!(fig; Symbol("yaxis$axis_idx"*"_range") => ylims)
+        relayout!(fig; Symbol("yaxis$axis_idx" * "_range") => ylims)
     end
 
 
@@ -931,8 +931,8 @@ function create_gaussian_mean_plot(
     xs = collect(1:T)
 
     for s in 1:S
-        add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(truM[s, :]), mode="lines+markers", name=(s==1 ? "True mean" : "True mean (s$s)")); row=s, col=1)
-        add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(estM[s, :]), mode="lines+markers", name=(s==1 ? "Estimated mean" : "Estimated mean (s$s)")); row=s, col=1)
+        add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(truM[s, :]), mode="lines+markers", name=(s == 1 ? "True mean" : "True mean (s$s)")); row=s, col=1)
+        add_trace!(plt, PlotlyJS.scatter(x=xs, y=vec(estM[s, :]), mode="lines+markers", name=(s == 1 ? "Estimated mean" : "Estimated mean (s$s)")); row=s, col=1)
         relayout!(plt;
             Symbol("yaxis$(s)") => attr(title="Mean"),
             Symbol("xaxis$(s)") => attr(title=(s == S ? "time" : ""))  # only bottom row gets x-title
@@ -1031,8 +1031,8 @@ function summarize_sim_plots(sim_plots; q=0.05)
             vals = [run[t] for run in runs]
 
             median_props[s, t] = median(vals)
-            lower_props[s, t] = quantile(vals, q/2)
-            upper_props[s, t] = quantile(vals, 1 - q/2)
+            lower_props[s, t] = quantile(vals, q / 2)
+            upper_props[s, t] = quantile(vals, 1 - q / 2)
         end
     end
 
@@ -1245,7 +1245,7 @@ function plot_median_and_CI(
                 line=attr(width=0),
                 fill="tonexty",
                 fillcolor="rgba(255,0,0,0.2)",
-                name=(s == 1 ? string((1-quantile)*100) * "% CI" : ""),
+                name=(s == 1 ? string((1 - quantile) * 100) * "% CI" : ""),
                 showlegend=(s == 1)
             ); row=row, col=col)
 
@@ -1456,7 +1456,7 @@ function extract_rtrans_range(rho_vec, x_vec)
     end
     lo = minimum(aggr_vals)#floor(minimum(aggr_vals))
     hi = maximum(aggr_vals)#ceil(maximum(aggr_vals))
-    step = (hi - lo)/5
+    step = (hi - lo) / 5
     println("Aggregated covariate values range from $lo to $hi")
     return lo:step:hi
 end
@@ -1600,20 +1600,13 @@ function ensemble_uq_monthly(
 
 end
 
-
-function ensemble_uq_monthly_return_traces(
+function select_params(model_params,
     est_output::EstimationOutput;
-    T::Integer=5,
-    observation_type::AbstractString="bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
-    quantile::Float64=0.05
-)
-    all_params = est_output.all_model_params
-
+    T::Integer=5)
     kept_params = []
-    for multistart in 1:length(all_params)
-        for params in all_params[multistart]
-            x=0
+    for multistart in 1:length(model_params)
+        for params in model_params[multistart]
+            x = 0
             lkl_obs = lkl_func(; model_params=params, sim_output=est_output.sim_output)
             for seed in 1:10
                 estimated_sim_output = run_simulation_from_model_params(
@@ -1624,19 +1617,52 @@ function ensemble_uq_monthly_return_traces(
                 )
                 lkl = lkl_func(; model_params=params, sim_output=estimated_sim_output)
                 if lkl > lkl_obs
-                    x+=1
+                    x += 1
                 end
             end
-            p = (1+x)/11
+            p = (1 + x) / 11
             if p > 0.05
                 push!(kept_params, params)
             end
         end
     end
+    return kept_params
+end
+
+
+function ensemble_uq_monthly_return_traces(
+    est_output::EstimationOutput;
+    T::Integer=5,
+    observation_type::AbstractString="bernoulli",
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    quantile::Float64=0.05
+)
+    all_params = est_output.all_model_params
+    n_starts = length(all_params)
+
+    if n_starts > Threads.nthreads()
+        # appropriate split threads
+        start_chunks_idx = Iterators.partition(1:n_starts, n_starts ÷ Threads.nthreads())
+    else
+        start_chunks_idx = Iterators.partition(1:n_starts, 1)
+    end
+
+    kept_params_list = []
+    kept_params_tasks = map(start_chunks_idx) do chunk_idx
+        Threads.@spawn select_params(all_params[chunk_idx], est_output; T=T)
+    end
+    kept_params = fetch.(kept_params_tasks)
+
+    idx = 1
+    for i in kept_params
+        for j in i
+            push!(kept_params_list, j)
+        end
+    end
 
     sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
     true_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
-    for params in kept_params
+    for params in kept_params_list
 
         # for simulation_seed in 1:10
         estimated_sim_output = run_simulation_from_model_params(
