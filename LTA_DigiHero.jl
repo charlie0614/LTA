@@ -10,8 +10,8 @@ using Plots
 ######### PREPROCESSING ##########
 
 sim_dir = "data/DigiHero/"
-n_states = 10
-sim_no = string("2026_07_20/", n_states, "states/age_sex_comorbidity_covs_fups_all_symptoms")
+n_states = 5
+sim_no = string("2026_07_20/", n_states, "states/age_sex_comorbidity_covs_fups_all_symptoms_all_steps")
 combined_all = CSV.read(sim_dir * "2026-07-20_data_symptoms_DigiHero_Bonn_preprocessed.csv", DataFrame, missingstring=["", "NA"]);
 
 println("Running simulation with ", sim_no)
@@ -36,7 +36,6 @@ estimation_output = LTA.run_estimation(sim_output; est_seed=1,
 save("outputs/" * sim_no * "/results/estimates/est_output.jld2", "estimation_output", estimation_output)
 
 # estimation_output = load("outputs/" * sim_no * "/results/estimates/est_output.jld2", "estimation_output")
-
 println("Iterations limit reached: ", count(estimation_output.iteration_limit_reached), "/", length(estimation_output.iteration_limit_reached))
 
 mkpath("outputs/" * sim_no * "/results/plots")
@@ -98,7 +97,6 @@ LTA.savefig_auto(waterfall, "outputs/" * sim_no * "/results/plots/waterfall.png"
 range = LTA.extract_rtrans_hist(best_model_params.rho_trans, sim_params.covariate_mat)
 range = LTA.extract_rtrans_range(best_model_params.rho_trans, sim_params.covariate_mat)
 
-println(range)
 fig4 = LTA.plot_transition_matrices(best_model_params.beta_transition, range)
 LTA.savefig_auto(fig4, "outputs/" * sim_no * "/results/plots/transition_matrices_covs_test.png")
 
@@ -107,7 +105,7 @@ LTA.savefig_auto(fig5, "outputs/" * sim_no * "/results/plots/initial_probs_covs.
 
 
 # Ensemble-based uncertainty quantification 
-fig = LTA.ensemble_uq_monthly(estimation_output; T=5, symptom_names=symptoms_list_fup, observation_type="bernoulli")
+fig = LTA.ensemble_uq_monthly_return_traces(estimation_output; T=5, symptom_names=symptoms_list_fup, observation_type="bernoulli")
 LTA.savefig_auto(fig, "outputs/" * sim_no * "/results/plots/ensemble_uq.png")
 
 # Ensemble-based uncertainty quantification 
