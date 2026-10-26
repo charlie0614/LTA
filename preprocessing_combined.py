@@ -118,9 +118,6 @@ def add_comorbidity_column(df: pd.DataFrame, col: str = "CCI_Score", out_col: st
 
 def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
     replace_column_names = {
-        "ih_acute_sym": "pcc_0months_sym",
-        "ih_4weeks_sym": "pcc_1months_sym",
-        "pcc_sym_12weeks": "pcc_3months_sym",
         "pcc_lcr_1": "pcc_6months",
         "pcc_lcr_2": "pcc_12months",
         "pcc_lcr_3": "pcc_18months",
@@ -200,6 +197,35 @@ def map_symptoms_severity_to_binary(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def map_symptoms_severity_to_ordinal(df: pd.DataFrame) -> pd.DataFrame:
+    symptom_cols = [c for c in df.columns if "_sym_" in c]
+    severity_mapping = {
+        "Beschwerde liegt nicht vor": 0,
+        "Nicht COVID bezogen": 0,
+        "Wenig beeinträchtigt": 1,
+        "Stark beeinträchtigt": 2,
+        -1: -1,
+        "Beschwerde liegt vor und steht im Zusammenhang mit COVID, stark beeinträchtigt": 2,
+        "Beschwerde liegt vor und steht im Zusammenhang mit COVID, wenig beeinträchtigt": 1,
+        "Beschwerde liegt vor und steht im Zusammenhang mit COVID, nicht beeinträchtigt": 0,
+        "Beschwerde liegt vor, steht aber nicht im Zusammenhang mit COVID": 0,
+        "Beschwerde liegt vor, nicht beeinträchtigt": 0
+    }
+
+    followup_prefixes = ("pcc_6months", "pcc_12months",
+                         "pcc_18months", "pcc_24months", "pcc_30months")
+    followup_sym_cols = [
+        c for c in symptom_cols if c.startswith(followup_prefixes)]
+
+    for col in followup_sym_cols:
+        df[col] = df[col].fillna(-1).map(severity_mapping)
+
+    all_missing = (df[followup_sym_cols] == -1).all(axis=1)
+    df = df[~all_missing]
+
+    return df
+
+
 def preprocess_file(in_path: Path, out_path: Path, age_categories: List[str] = AGE_CATEGORIES) -> pd.DataFrame:
     df = pd.read_csv(in_path)
     df = is_healed(df)
@@ -207,7 +233,7 @@ def preprocess_file(in_path: Path, out_path: Path, age_categories: List[str] = A
     add_age_category_flags(df, age_categories=age_categories)
     add_female_column(df)
     add_comorbidity_column(df)
-    df = map_symptoms_severity_to_binary(df)
+    df = map_symptoms_severity_to_ordinal(df)
     df.to_csv(out_path, index=False)
     return df
 
@@ -218,7 +244,7 @@ def main() -> None:
     parser.add_argument(
         "infile", nargs="?", default="data/DigiHero/2026-07-20_data_symptoms_DigiHero_Bonn.csv")
     parser.add_argument(
-        "outfile", nargs="?", default="data/DigiHero/2026-07-20_data_symptoms_DigiHero_Bonn_preprocessed.csv")
+        "outfile", nargs="?", default="data/DigiHero/2026-07-20_data_symptoms_DigiHero_Bonn_preprocessed_ordinal.csv")
     args = parser.parse_args()
     preprocess_file(Path(args.infile), Path(args.outfile))
 
