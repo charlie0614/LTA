@@ -1,6 +1,6 @@
 import argparse
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 import numpy as np
@@ -164,8 +164,36 @@ def is_healed(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def map_symptoms_severity_to_binary(df: pd.DataFrame) -> pd.DataFrame:
+FOLLOWUP_PREFIXES = ("pcc_6months", "pcc_12months",
+                     "pcc_18months", "pcc_24months", "pcc_30months")
+
+# symptoms that are coded ordinal at the follow-ups, all others are binary
+# set to "all" to treat every follow-up symptom as ordinal
+ORDINAL_SYMPTOMS: Union[List[str], str] = "all"
+# symptoms that are always binary, overrides ORDINAL_SYMPTOMS
+# ("all" + BINARY_SYMPTOMS = all but these are ordinal)
+BINARY_SYMPTOMS: List[str] = []
+
+
+def split_symptom_columns(df: pd.DataFrame,
+                          ordinal_symptoms: Union[List[str], str] = ORDINAL_SYMPTOMS,
+                          binary_symptoms: List[str] = BINARY_SYMPTOMS) -> Tuple[List[str], List[str]]:
+    """Return (binary_cols, ordinal_cols). Ordinal only applies to follow-up columns,
+    earlier timepoints use a different answer scale and stay binary."""
+    def is_symptom(c, symptoms):
+        return any(c.endswith("_sym_" + s) for s in symptoms)
+
     symptom_cols = [c for c in df.columns if "_sym_" in c]
+    ordinal_cols = [
+        c for c in symptom_cols
+        if c.startswith(FOLLOWUP_PREFIXES)
+        and (ordinal_symptoms == "all" or is_symptom(c, ordinal_symptoms))
+        and not is_symptom(c, binary_symptoms)]
+    binary_cols = [c for c in symptom_cols if c not in ordinal_cols]
+    return binary_cols, ordinal_cols
+
+
+def map_symptoms_severity_to_binary(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
     severity_mapping = {
         "Beschwerde liegt nicht vor": 0,
         "Nicht COVID bezogen": 0,
@@ -184,21 +212,13 @@ def map_symptoms_severity_to_binary(df: pd.DataFrame) -> pd.DataFrame:
         "Beschwerde liegt vor, steht aber nicht im Zusammenhang mit COVID": 0,
         "Beschwerde liegt vor, nicht beeinträchtigt": 0
     }
-    for col in symptom_cols:
+    for col in cols:
         df[col] = df[col].fillna(-1).map(severity_mapping)
-
-    followup_prefixes = ("pcc_6months", "pcc_12months",
-                         "pcc_18months", "pcc_24months", "pcc_30months")
-    followup_sym_cols = [
-        c for c in symptom_cols if c.startswith(followup_prefixes)]
-    all_missing = (df[followup_sym_cols] == -1).all(axis=1)
-    df = df[~all_missing]
 
     return df
 
 
-def map_symptoms_severity_to_ordinal(df: pd.DataFrame) -> pd.DataFrame:
-    symptom_cols = [c for c in df.columns if "_sym_" in c]
+def map_symptoms_severity_to_ordinal(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
     severity_mapping = {
         "Beschwerde liegt nicht vor": 0,
         "Nicht COVID bezogen": 0,
@@ -211,29 +231,30 @@ def map_symptoms_severity_to_ordinal(df: pd.DataFrame) -> pd.DataFrame:
         "Beschwerde liegt vor, steht aber nicht im Zusammenhang mit COVID": 0,
         "Beschwerde liegt vor, nicht beeinträchtigt": 0
     }
-
-    followup_prefixes = ("pcc_6months", "pcc_12months",
-                         "pcc_18months", "pcc_24months", "pcc_30months")
-    followup_sym_cols = [
-        c for c in symptom_cols if c.startswith(followup_prefixes)]
-
-    for col in followup_sym_cols:
+    for col in cols:
         df[col] = df[col].fillna(-1).map(severity_mapping)
-
-    all_missing = (df[followup_sym_cols] == -1).all(axis=1)
-    df = df[~all_missing]
 
     return df
 
 
+def remove_all_missing_followups(df: pd.DataFrame) -> pd.DataFrame:
+    followup_sym_cols = [
+        c for c in df.columns if "_sym_" in c and c.startswith(FOLLOWUP_PREFIXES)]
+    all_missing = (df[followup_sym_cols] == -1).all(axis=1)
+    return df[~all_missing]
+
+
 def preprocess_file(in_path: Path, out_path: Path, age_categories: List[str] = AGE_CATEGORIES) -> pd.DataFrame:
-    df = pd.read_csv(in_path)
+    df = pd.read_csv(in_path).fillna(-1)
     df = is_healed(df)
     df = rename_columns(df)
     add_age_category_flags(df, age_categories=age_categories)
     add_female_column(df)
     add_comorbidity_column(df)
-    df = map_symptoms_severity_to_ordinal(df)
+    binary_cols, ordinal_cols = split_symptom_columns(df)
+    df = map_symptoms_severity_to_ordinal(df, ordinal_cols)
+    df = map_symptoms_severity_to_binary(df, binary_cols)
+    df = remove_all_missing_followups(df)
     df.to_csv(out_path, index=False)
     return df
 

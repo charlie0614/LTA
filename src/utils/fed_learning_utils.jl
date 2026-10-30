@@ -177,12 +177,18 @@ end
 function preprocess(df::DataFrame;
     covariates::Vector{String},
     binary_syms::Vector{String},
+    ordinal_syms::Vector{String},
     cont_syms::Vector{String},
     visit_prefixes::Vector{String},
     time_labels::Vector{String})
 
     # Binary symptoms → Int tensor (with -1 for missing)
     bernoulli_observations = build_tensor_designation_digihero(df, binary_syms,
+        visit_prefixes, time_labels;
+        Ttype=Int)
+
+    # Ordinal symptoms → Int tensor (with -1 for missing)
+    ordinal_observations = build_tensor_designation_digihero(df, ordinal_syms,
         visit_prefixes, time_labels;
         Ttype=Int)
 
@@ -194,10 +200,13 @@ function preprocess(df::DataFrame;
     # Covariates → matrix
     pat_cov  = build_covariates(df, covariates)
 
-    return (
-      bernoulli_observations = bernoulli_observations,
-    #   gaussian_observations   = gaussian_observations
-    ), pat_cov
+    observations = NamedTuple()
+    isempty(binary_syms) || (observations = (; observations..., bernoulli_observations = bernoulli_observations))
+    isempty(ordinal_syms) || (observations = (; observations..., ordinal_observations = ordinal_observations))
+    isempty(cont_syms) || (observations = (; observations..., gaussian_observations = gaussian_observations))
+
+    return observations, pat_cov
+
 end
 
 
@@ -229,7 +238,6 @@ function create_data_sim_params(
 )
 
     mask = mask_all_minus_one_matrices(observations)
-
     n_obs_tup = ()
     masked_observations = ()
     N = 0
@@ -241,6 +249,12 @@ function create_data_sim_params(
         n_obs_tup = (; n_obs_tup..., bernoulli = symp)
         masked_observations = (; masked_observations..., bernoulli_observations = bernoulli_observations)
         N = size(bernoulli_observations, 1)
+    end
+    if haskey(observations, :ordinal_observations)
+        ordinal_observations = observations.ordinal_observations[.!mask, :, :]
+        N, T, symp = size(ordinal_observations)
+        n_obs_tup = (; n_obs_tup..., ordinal = symp, ordinal_categories = maximum(ordinal_observations)+1)
+        masked_observations = (; masked_observations..., ordinal_observations = ordinal_observations)
     end
     if haskey(observations, :gaussian_observations)
         gaussian_observations = observations.gaussian_observations[.!mask, :, :]
@@ -300,6 +314,7 @@ function create_sim_mod_data(
     observations, covariate_df = preprocess(df;
         covariates      = kwargs[:covs],
         binary_syms     = kwargs[:bins],
+        ordinal_syms = kwargs[:ordinals],
         cont_syms       = kwargs[:conts],
         visit_prefixes  = kwargs[:visits],
         time_labels     = kwargs[:labels],
