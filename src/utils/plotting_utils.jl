@@ -1526,6 +1526,13 @@ function ensemble_uq_fup(
 
 end
 
+function check_convergence(
+    est_output::EstimationOutput;
+)
+    lkl_idx = sortperm(est_output.fitted_log_lkl_list)
+    println(est_output.fitted_log_lkl_list[lkl_idx])
+end
+
 function ensemble_uq_monthly_stats(
     est_output::EstimationOutput;
     T::Integer=5,
