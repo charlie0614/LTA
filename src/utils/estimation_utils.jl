@@ -35,6 +35,8 @@ function model_params_2_param_vec(
     rho_initial_vec = haskey(model_params, :rho_initial) ? vec(model_params.rho_initial) : Float64[]
     rho_trans_vec = haskey(model_params, :rho_trans) ? vec(model_params.rho_trans) : Float64[]
     beta_bernoulli_vec = haskey(model_params.emissions, :beta_bernoulli) ? vec(model_params.emissions.beta_bernoulli) : Float64[]
+    ordinal_beta_vec = haskey(model_params.emissions, :beta_ordinal) ? vec(model_params.emissions.beta_ordinal.beta) : Float64[]
+    ordinal_alpha_vec = haskey(model_params.emissions, :beta_ordinal) ? vec(model_params.emissions.beta_ordinal.alpha) : Float64[]
     gaussian_means_vec = haskey(model_params.emissions, :beta_gaussian) ? vec(model_params.emissions.beta_gaussian.means) : Float64[]
     gaussian_stds_vec = haskey(model_params.emissions, :beta_gaussian) ? vec(model_params.emissions.beta_gaussian.stds) : Float64[]
 
@@ -44,6 +46,8 @@ function model_params_2_param_vec(
         rho_initial_vec,
         rho_trans_vec,
         beta_bernoulli_vec,
+        ordinal_beta_vec,
+        ordinal_alpha_vec,
         gaussian_means_vec,
         gaussian_stds_vec
     )
@@ -102,6 +106,20 @@ function param_vec_2_model_params(
         beta_bernoulli = reshape(params_vec[idx:(idx+l_bern-1)], dims_beta_bern);
         idx += l_bern
         emissions = (; emissions..., beta_bernoulli=beta_bernoulli)
+    end
+
+    if haskey(n_obs_tup, :ordinal)
+        dims_beta_ord = (n_states, length(covariate_tup[:em])+1, n_obs_tup.ordinal)
+        l_beta_ord = prod(dims_beta_ord)
+        beta = reshape(params_vec[idx:(idx+l_beta_ord-1)], dims_beta_ord)
+        idx += l_beta_ord
+        dims_alpha_ord = (n_obs_tup.ordinal_categories -2, n_obs_tup.ordinal)
+        l_alpha_ord = prod(dims_alpha_ord)
+        alpha = reshape(params_vec[idx:(idx+l_alpha_ord-1)], dims_alpha_ord)
+        idx += l_alpha_ord
+        beta_ordinal = (beta=beta,
+        alpha = alpha)
+        emissions = (; emissions..., beta_ordinal=beta_ordinal)
     end
 
     if haskey(n_obs_tup, :gaussian)
@@ -579,22 +597,6 @@ function lkl_func(;
 end
 
 
-function lkl_func_transmat(;
-    model_params::NamedTuple,
-    sim_output::SimulationOutput,
-)
-    alpha, n_zeroed = populate_forward_threads_transmat(;
-        model_params=model_params,
-        sim_output=sim_output,
-    )
-    # println("alpha: ", alpha)
-    log_sample_contribution = sum_alpha_across_states_transmat(alpha[:, end, :]) # using the last timepoint
-    neg_log_lkl = -sum(log_sample_contribution) # weight it in log space
-
-    return neg_log_lkl, n_zeroed
-
-end
-
 function populate_forward_threads(;
     model_params::NamedTuple,
     sim_output::SimulationOutput,
@@ -608,6 +610,7 @@ function populate_forward_threads(;
     )
 
     bern_cond = haskey(sim_output.observations, :bernoulli_observations)
+    ord_cond = haskey(sim_output.observations, :ordinal_observations)
     gauss_cond = haskey(sim_output.observations, :gaussian_observations)
 
     N = sim_hyper.N
@@ -621,6 +624,7 @@ function populate_forward_threads(;
 
         @views begin
             bern = bern_cond ? sim_output.observations.bernoulli_observations[chunk_idx, :, :] : nothing
+            ord = ord_cond ? sim_output.observations.ordinal_observations[chunk_idx, :, :] : nothing
             gauss = gauss_cond ? sim_output.observations.gaussian_observations[chunk_idx, :, :] : nothing
             covs = sim_params.covariate_mat[chunk_idx, :]
         end
@@ -629,6 +633,7 @@ function populate_forward_threads(;
             model_params=model_params,
 
             bernoulli_observations=bern,
+            ordinal_observations=ord,
             gaussian_observations=gauss,
             covariate_mat=covs,
             covariate_idx=covariate_idx
@@ -653,64 +658,6 @@ function populate_forward_threads(;
     return alpha
 end
 
-function populate_forward_threads_transmat(;
-    model_params::NamedTuple,
-    sim_output::SimulationOutput,
-)
-
-    # unpack 
-    sim_params, sim_hyper = unpack(sim_output)
-    covariate_idx = convert_covariate_2_df_indices(
-        sim_params.covariate_mat_headers,
-        sim_hyper.covariate_tup
-    )
-
-    bern_cond = haskey(sim_output.observations, :bernoulli_observations)
-    gauss_cond = haskey(sim_output.observations, :gaussian_observations)
-
-    N = sim_hyper.N
-    if N > Threads.nthreads()
-        sample_chunks_idx = Iterators.partition(1:N, N ÷ Threads.nthreads())
-    else
-        sample_chunks_idx = Iterators.partition(1:N, N)
-    end
-
-    tasks = map(sample_chunks_idx) do chunk_idx
-
-        @views begin
-            bern = bern_cond ? sim_output.observations.bernoulli_observations[chunk_idx, :, :] : nothing
-            gauss = gauss_cond ? sim_output.observations.gaussian_observations[chunk_idx, :, :] : nothing
-            covs = sim_params.covariate_mat[chunk_idx, :]
-        end
-
-        Threads.@spawn populate_forward_transmat(;
-            model_params=model_params,
-            bernoulli_observations=bern,
-            gaussian_observations=gauss,
-            covariate_mat=covs,
-            covariate_idx=covariate_idx
-        )
-    end
-
-    results = fetch.(tasks)
-    alpha_chunks = first.(results)
-    n_zeroed = reduce(vcat, last.(results))
-
-    # recombine
-    N = sum(size(ch, 1) for ch in alpha_chunks)
-    T = size(alpha_chunks[1], 2)
-    I = size(alpha_chunks[1], 3)
-
-    alpha = similar(alpha_chunks[1], N, T, I)
-    offset = 1
-    for ch in alpha_chunks
-        len = size(ch, 1)
-        @views alpha[offset:(offset+len-1), :, :] .= ch
-        offset += len
-    end
-
-    return alpha, n_zeroed
-end
 
 function precompute_transition(
     beta_transition::Array{<:Real},
@@ -729,32 +676,10 @@ function precompute_transition(
     return log_transition_tensor
 end
 
-function precompute_transition_transmat(
-    beta_transition::Array{<:Real},
-    rho_param::Vector{<:Real},
-    covariate_mat::Array{<:Union{Missing,Float64}};
-    threshold::Float64=1e-3,
-)
-
-    # precompute the transition matrix of each patient, fixing small transitions to 0
-    N = size(covariate_mat, 1)
-    I = size(beta_transition, 3)
-    log_transition_tensor = zeros(eltype(beta_transition), N, I, I)
-    n_zeroed = zeros(Int64, N) # number of transitions fixed to 0 per patient
-    for n in 1:N
-        trans_mat = get_rho_beta_transition_mat(beta_transition, rho_param, covariate_mat[n, :])
-        n_zeroed[n] = count(trans_mat .< threshold)
-        trans_mat = ifelse.(trans_mat .< threshold, zero(eltype(trans_mat)), trans_mat)
-        trans_mat = trans_mat ./ sum(trans_mat, dims=2) # renormalise rows
-        log_transition_tensor[n, :, :] .= trans_mat
-    end
-    log_transition_tensor = log.(log_transition_tensor) # log(0) = -Inf, handled by logsumexp
-    return log_transition_tensor, n_zeroed
-end
-
 function populate_forward(;
     model_params::NamedTuple,
     bernoulli_observations::Union{AbstractArray{Int64},Nothing}=nothing,
+    ordinal_observations::Union{AbstractArray{Int64}, Nothing}=nothing,
     gaussian_observations::Union{AbstractArray{Float64},Nothing}=nothing,
     covariate_mat::AbstractMatrix{Float64},
     covariate_idx::NamedTuple
@@ -768,22 +693,25 @@ function populate_forward(;
     )
 
     using_bern = haskey(model_params.emissions, :beta_bernoulli)
+    using_ord = haskey(model_params.emissions, :beta_ordinal)
     using_gauss = haskey(model_params.emissions, :beta_gaussian)
 
     # emission currently cant handle covariates
     bernoulli_probs = using_bern ? get_bernoulli_probs(model_params.emissions.beta_bernoulli, covariate_mat[1, covariate_idx[:em]]) : nothing
-    # print(model_params.emissions.beta_gaussian)
+    ordinal_probs = using_ord ? get_ordinal_probs(model_params.emissions.beta_ordinal) : nothing
     true_gaussian_emission = using_gauss ? convert_gauss_2_true(model_params.emissions.beta_gaussian) : nothing
 
 
     N = size(covariate_mat, 1)
     I = size(model_params.beta_transition, 3)
 
-    if using_bern && using_gauss
-        @assert size(bernoulli_observations, 2) == size(gaussian_observations, 2) "Bernoulli and Gaussian T differ"
+    if using_bern && using_ord && using_gauss
+        @assert size(bernoulli_observations, 2) == size(ordinal_observations, 2) == size(gaussian_observations, 2) "Bernoulli, Ordinal and Gaussian T differ"
         T = size(bernoulli_observations, 2)
     elseif using_bern
         T = size(bernoulli_observations, 2)
+    elseif using_ord 
+        T = size(ordinal_observations, 2)
     elseif using_gauss
         T = size(gaussian_observations, 2)
     else
@@ -810,8 +738,10 @@ function populate_forward(;
             log_symp_contr = get_probs_from_observable(;
                 state_no=i,
                 bernoulli_obs_vec=using_bern ? bernoulli_observations[n, 1, :] : nothing,
+                ordinal_obs_vec=using_ord ? ordinal_observations[n, 1, :] : nothing,
                 gaussian_obs_vec=using_gauss ? gaussian_observations[n, 1, :] : nothing,
                 bernoulli_probs=bernoulli_probs,
+                ordinal_probs=ordinal_probs,
                 true_gaussian_emission=true_gaussian_emission
             )
             alpha[n, 1, i] = log_symp_contr + log_state[i]
@@ -835,8 +765,10 @@ function populate_forward(;
                 log_symp_contr = get_probs_from_observable(;
                     state_no=i,
                     bernoulli_obs_vec=using_bern ? bernoulli_observations[n, t, :] : nothing,
+                    ordinal_obs_vec=using_ord ? ordinal_observations[n, t, :] : nothing,
                     gaussian_obs_vec=using_gauss ? gaussian_observations[n, t, :] : nothing,
                     bernoulli_probs=bernoulli_probs,
+                    ordinal_probs=ordinal_probs,
                     true_gaussian_emission=true_gaussian_emission
                 )
 
@@ -848,107 +780,13 @@ function populate_forward(;
     return alpha
 end
 
-function populate_forward_transmat(;
-    model_params::NamedTuple,
-    bernoulli_observations::Union{AbstractArray{Int64},Nothing}=nothing,
-    gaussian_observations::Union{AbstractArray{Float64},Nothing}=nothing,
-    covariate_mat::AbstractMatrix{Float64},
-    covariate_idx::NamedTuple
-)
-
-    # precompute transition and emission mats (for speed..)
-    log_transition_tensor, n_zeroed = precompute_transition_transmat(
-        model_params.beta_transition,
-        model_params.rho_trans,
-        covariate_mat[:, covariate_idx[:trans]],
-    )
-
-    using_bern = haskey(model_params.emissions, :beta_bernoulli)
-    using_gauss = haskey(model_params.emissions, :beta_gaussian)
-
-    # emission currently cant handle covariates
-    bernoulli_probs = using_bern ? get_bernoulli_probs(model_params.emissions.beta_bernoulli, covariate_mat[1, covariate_idx[:em]]) : nothing
-    # print(model_params.emissions.beta_gaussian)
-    true_gaussian_emission = using_gauss ? convert_gauss_2_true(model_params.emissions.beta_gaussian) : nothing
-
-
-    N = size(covariate_mat, 1)
-    I = size(model_params.beta_transition, 3)
-
-    if using_bern && using_gauss
-        @assert size(bernoulli_observations, 2) == size(gaussian_observations, 2) "Bernoulli and Gaussian T differ"
-        T = size(bernoulli_observations, 2)
-    elseif using_bern
-        T = size(bernoulli_observations, 2)
-    elseif using_gauss
-        T = size(gaussian_observations, 2)
-    else
-        stop("No observations provided")
-    end
-
-    # pre allocation
-    alpha = zeros(eltype(model_params.beta_initial), N, T, I)
-    initial_states = zeros(eltype(model_params.beta_initial), I)
-    log_symp_contr::eltype(model_params.beta_initial) = 0.0
-    log_trans_prob::eltype(model_params.beta_initial) = 0.0
-
-    # initialisation
-    for n in 1:N
-
-        # generate prob matrices
-        initial_states = get_rho_beta_initial_states(
-            model_params.beta_initial,
-            model_params.rho_initial,
-            covariate_mat[n, covariate_idx[:initial]])
-        log_state = log.(initial_states)
-
-        for i in 1:I
-            log_symp_contr = get_probs_from_observable(;
-                state_no=i,
-                bernoulli_obs_vec=using_bern ? bernoulli_observations[n, 1, :] : nothing,
-                gaussian_obs_vec=using_gauss ? gaussian_observations[n, 1, :] : nothing,
-                bernoulli_probs=bernoulli_probs,
-                true_gaussian_emission=true_gaussian_emission
-            )
-            alpha[n, 1, i] = log_symp_contr + log_state[i]
-        end
-    end
-
-    # from time = 2
-    for t in 2:T
-        for n in 1:N
-            for i in 1:I
-
-                # transition to new states
-                log_trans_prob = log_space_transition_state(
-                    state_no=i,
-                    log_state_probs=alpha[n, t-1, :],
-                    log_transition_mat=log_transition_tensor[n, :, :],
-                    # n_states = I,
-                )
-
-                # observation
-                log_symp_contr = get_probs_from_observable(;
-                    state_no=i,
-                    bernoulli_obs_vec=using_bern ? bernoulli_observations[n, t, :] : nothing,
-                    gaussian_obs_vec=using_gauss ? gaussian_observations[n, t, :] : nothing,
-                    bernoulli_probs=bernoulli_probs,
-                    true_gaussian_emission=true_gaussian_emission
-                )
-
-                alpha[n, t, i] = log_trans_prob + log_symp_contr
-            end
-        end
-    end
-
-    return alpha, n_zeroed
-end
-
 function get_probs_from_observable(;
     state_no::Int64,
     bernoulli_obs_vec::Union{Vector{Int64},Nothing},
+    ordinal_obs_vec::Union{Vector{Int64},Nothing},
     gaussian_obs_vec::Union{Vector{Float64},Nothing},
     bernoulli_probs::Union{Matrix{<:Real},Nothing},
+    ordinal_probs::Union{Array{<:Real,3},Nothing},
     true_gaussian_emission::Union{NamedTuple,Nothing}
 )
     # get unormalised vector fof proabbility latent states, using observables but NOT state probs
@@ -960,6 +798,15 @@ function get_probs_from_observable(;
             state_no=state_no,
             bernoulli_obs_vec=bernoulli_obs_vec,
             bernoulli_probs=bernoulli_probs
+        )
+    end
+
+    if !isnothing(ordinal_obs_vec)
+        # ordinal
+        log_symp_contr += get_ordinal_accumalator(;
+            state_no=state_no,
+            ordinal_obs_vec=ordinal_obs_vec,
+            ordinal_probs=ordinal_probs
         )
     end
 
@@ -999,6 +846,29 @@ function get_bernoulli_accumalator(;
     return log_symp_contr
 end
 
+function get_ordinal_accumalator(;
+    state_no::Int64,
+    ordinal_obs_vec::Vector{Int64},
+    ordinal_probs::Array{<:Real,3}
+)
+
+    n_sympt = length(ordinal_obs_vec)
+    probs_from_states = zeros(eltype(ordinal_probs), n_sympt)
+    for symptom_idx in 1:length(ordinal_obs_vec)
+
+        probs_from_states[symptom_idx] = get_ordinal_val(
+            from_state=state_no,
+            to_observable=symptom_idx,
+            observable_instance=ordinal_obs_vec[symptom_idx],
+            ordinal_probs=ordinal_probs
+        )
+    end
+
+    log_symp_contr = sum(log.(probs_from_states))
+
+    return log_symp_contr
+end
+
 function get_bernoulli_val(;
     from_state::Int64,
     to_observable::Int64,
@@ -1012,6 +882,22 @@ function get_bernoulli_val(;
         output = 1 - bernoulli_probs[from_state, to_observable]
     elseif observable_instance == -1
         output = 1 # basically skip the observation
+    end
+
+    return output
+end
+
+function get_ordinal_val(;
+    from_state::Int64,
+    to_observable::Int64,
+    observable_instance::Int64,
+    ordinal_probs::Array{<:Real, 3},
+)
+    output::eltype(ordinal_probs) = 0.0
+    if observable_instance == -1
+        output = 1 # basically skip the observation
+    else
+        output = ordinal_probs[from_state, to_observable, observable_instance+1] # categories 0..J-1 -> index 1..J
     end
 
     return output

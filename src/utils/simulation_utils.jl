@@ -62,6 +62,16 @@ function gen_beta_bernoulli_emission(; seed = 1, n_states = n_states, k = k, n_s
 	return beta_emission
 end
 
+function gen_beta_ordinal_emission(; seed::Int64 = 2, n_states = 3, n_obs_ordinal = 2, n_categories = 3)
+	# generate a random emission for the ordinal outcomes (natural scale, then convert)
+	gaps = rand(MersenneTwister(seed + 1), Uniform(0.5, 3), n_categories - 2, n_obs_ordinal)
+	true_ordinal_emission = (
+		beta = rand(MersenneTwister(seed), Uniform(-2, 2), n_states, 1, n_obs_ordinal), # state effect
+		alpha = vcat(zeros(1, n_obs_ordinal), cumsum(gaps, dims=1))                      # cutpoints, alpha_1 = 0
+	)
+	return convert_ordinal_2_form(true_ordinal_emission)
+end
+
 function gen_model_params(; seed, n_states, covariate_tup, n_obs_tup, ref_state)
 
 	# generate model params for simulation
@@ -109,6 +119,12 @@ function gen_model_params(; seed, n_states, covariate_tup, n_obs_tup, ref_state)
 			beta_bernoulli = gen_beta_bernoulli_emission(; 
 				seed = seed + 5, n_states = n_states, k = 1, n_sympt = nm)
 			emissions = (; emissions..., beta_bernoulli = beta_bernoulli)
+		elseif dist == :ordinal	
+			nm = n_obs_tup[:ordinal]
+			@assert nm > 0 "No ordinal symptoms specified!";
+			beta_ordinal = gen_beta_ordinal_emission(; 
+				seed = seed + 6, n_states = n_states, n_obs_ordinal = nm, n_categories=n_obs_tup.ordinal_categories)
+			emissions = (; emissions..., beta_ordinal = beta_ordinal)
 		elseif dist == :gaussian	
 			nm = n_obs_tup[:gaussian]
 			@assert nm > 0 "No gaussian symptoms specified!";
@@ -172,6 +188,23 @@ function get_bernoulli_probs(
 	return out
 end
 
+function get_ordinal_probs(beta_ordinal::NamedTuple)
+	true_ordinal = convert_ordinal_2_true(beta_ordinal)
+	beta = true_ordinal.beta[:, 1, :]
+	alpha = true_ordinal.alpha                     # (J-1) × M
+	S, M = size(beta)
+	J = size(alpha, 1) + 1
+	R = promote_type(eltype(beta), eltype(alpha))  # keeps ForwardDiff types
+
+	probs = zeros(R, S, M, J)
+	for m in 1:M, s in 1:S
+		p_geq = vcat(one(R), sigmoid.(beta[s, m] .- alpha[:, m]), zero(R))
+		probs[s, m, :] = p_geq[1:J] .- p_geq[2:(J+1)]
+	end
+	return probs
+end
+
+
 function gen_beta_gaussion_emission(; seed::Int64 = 2, n_states = 3, n_obs_cont = 2)
 	# generate a random emission matrix for the continuous outcomes
 
@@ -224,6 +257,17 @@ function convert_gauss_2_form(x::NamedTuple)
 	)
 
 	return out
+end
+
+function convert_ordinal_2_true(x::NamedTuple)
+	# stored log gaps -> cutpoints per symptom: alpha_1 = 0 < alpha_2 < ... (size (J-1, M))
+	alpha = vcat(zeros(eltype(x.alpha), 1, size(x.alpha, 2)), cumsum(exp.(x.alpha), dims=1))
+	return (beta = x.beta, alpha = alpha)
+end
+
+function convert_ordinal_2_form(x::NamedTuple)
+	# cutpoints (alpha_1 = 0 first row) -> log gaps between consecutive cutpoints (size (J-2, M))
+	return (beta = x.beta, alpha = log.(diff(x.alpha, dims=1)))
 end
 
 function multinom_reg(
@@ -284,6 +328,37 @@ function sample_bernoulli(
 	
 	return bernoulli_observations
 end
+
+function sample_single_ordinal(
+	state::Int64,
+	ordinal_probs::Array{Float64,3}
+)
+	# draw observations from state, categories coded 0..J-1
+	si = size(ordinal_probs, 2)
+	obs_vec = Vector{Int64}(undef, si)
+
+	for symptom_ind in 1:si
+		cat_dist = Distributions.Categorical(ordinal_probs[state, symptom_ind, :]) # random categorical draw!
+		obs_vec[symptom_ind] = rand(cat_dist) - 1
+	end
+
+	return obs_vec
+end
+
+function sample_ordinal(
+	states::Vector{Int64};
+	ordinal_probs::Array{Float64,3}
+	)
+
+	T = length(states)
+	ordinal_observations = Matrix{Int64}(undef, T, size(ordinal_probs, 2))
+	for time in 1:T
+		ordinal_observations[time, :] = sample_single_ordinal(states[time], ordinal_probs)
+	end
+
+	return ordinal_observations
+end
+
 
 function sample_single_gaussian(
 	state::Int64;
@@ -406,6 +481,10 @@ function simulate_HMM_sample(;
 			bernoulli_probability_mat = get_bernoulli_probs(model_params.emissions.beta_bernoulli, covariate_vec[covariate_idx[:em]])
 			bernoulli_observations = sample_bernoulli(state; bernoulli_probability_mat = bernoulli_probability_mat)
 			observations = (; observations..., bernoulli_observations = bernoulli_observations)
+		elseif dist == :beta_ordinal
+			ordinal_probs = get_ordinal_probs(model_params.emissions.beta_ordinal)
+			ordinal_observations = sample_ordinal(state; ordinal_probs = ordinal_probs)
+			observations = (; observations..., ordinal_observations = ordinal_observations)
 		elseif dist == :beta_gaussian	
 			true_gaussian_emission = convert_gauss_2_true(model_params.emissions.beta_gaussian)
 			gaussian_observations = sample_gaussian(state; true_gaussian_emission = true_gaussian_emission)
@@ -463,10 +542,13 @@ function simulate(;
 
 	# observations
 	bernoulli_observations = Array{Int64}(undef, N, T, 0)
+	ordinal_observations = Array{Int64}(undef, N, T, 0)
 	gaussian_observations = Array{Float64}(undef, N, T, 0)
 	for dist in keys(model_params.emissions)
 		if dist == :beta_bernoulli
 			bernoulli_observations = Array{Int64}(undef, N, T, size(model_params.emissions.beta_bernoulli, 3))
+		elseif dist == :beta_ordinal
+			ordinal_observations = Array{Int64}(undef, N, T, size(model_params.emissions.beta_ordinal.beta, 3))
 		elseif dist == :beta_gaussian
 			gaussian_observations = Array{Float64}(undef, N, T, size(model_params.emissions.beta_gaussian.means, 2))
 		end
@@ -485,6 +567,8 @@ function simulate(;
 		for dist in keys(model_params.emissions)
 			if dist == :beta_bernoulli
 				bernoulli_observations[i, :, :] = observation.bernoulli_observations
+			elseif dist == :beta_ordinal
+				ordinal_observations[i, :, :] = observation.ordinal_observations
 			elseif dist == :beta_gaussian
 				gaussian_observations[i, :, :] = observation.gaussian_observations
 			end
@@ -496,6 +580,8 @@ function simulate(;
 	for dist in keys(model_params.emissions)
 		if dist == :beta_bernoulli
 			observations = (; observations..., bernoulli_observations = bernoulli_observations)
+		elseif dist == :beta_ordinal
+			observations = (; observations..., ordinal_observations = ordinal_observations)
 		elseif dist == :beta_gaussian
 			observations = (; observations..., gaussian_observations = gaussian_observations)
 		end

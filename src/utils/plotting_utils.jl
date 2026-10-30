@@ -769,6 +769,20 @@ function get_binary_proportions(obs; skip_missing::Bool=true)
     end
 end
 
+function get_ordinal_proportions(obs::AbstractArray{<:Integer,3}, J::Integer)
+    N, T, S = size(obs)
+    P = fill(NaN, S, T, J)
+    for s in 1:S, t in 1:T
+        v = filter(!=(-1), @view obs[:, t, s])
+        isempty(v) && continue
+        for j in 1:J
+            P[s, t, j] = mean(v .== j - 1)
+        end
+    end
+    return P
+end
+
+
 function create_bernoulli_proportion_plot2(
     estimated_props::AbstractMatrix,
     true_props::AbstractMatrix;
@@ -818,6 +832,64 @@ function create_bernoulli_proportion_plot2(
         legend_title_text="Series", height=300 + 200 * nrows, width=2000)
     return plt
 end
+
+function create_ordinal_proportion_plot_fup(
+    estimated_props::AbstractArray{<:Real,3},
+    true_props::AbstractArray{<:Real,3};
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    category_labels::Union{Nothing,Vector{<:AbstractString}}=nothing
+)
+    est = estimated_props
+    tru = true_props
+    @assert size(est) == size(tru) "Estimated and true proportion arrays must have same size"
+    S, T, J = size(est)
+
+    titles = isnothing(symptom_names) ? _subplot_titles(S, "Ordinal proportion") : symptom_names
+    titles = reshape([string(t) for t in titles], S, 1)
+    category_labels = isnothing(category_labels) ? string.(0:(J-1)) : category_labels
+    # ordered palette: light (no symptom) -> dark (severe)
+    palette = ["#94A3B8", "#F97316", "#B91C1C", "#7C3AED", "#0F766E"]
+
+    ncols = min(S, 3)
+    nrows = cld(S, ncols)
+    plt = make_subplots(rows=nrows, cols=ncols; shared_xaxes=true, vertical_spacing=0.02, horizontal_spacing=0.02, subplot_titles=titles)
+    xs = collect(1:T)
+
+    for s in 1:S
+        row = div(s - 1, ncols) + 1
+        col = mod(s - 1, ncols) + 1
+
+
+        for j in 1:J
+            color = palette[mod1(j, length(palette))]
+            add_trace!(plt, PlotlyJS.scatter(
+                    x=xs, y=vec(tru[s, :, j]),
+                    mode="lines+markers",
+                    name="$(category_labels[j]) (true)",
+                    legendgroup="cat$j",
+                    showlegend=(s == 1),
+                    line=attr(color=color)
+                ); row=row, col=col)
+            add_trace!(plt, PlotlyJS.scatter(
+                    x=xs, y=vec(est[s, :, j]),
+                    mode="lines+markers",
+                    name="$(category_labels[j]) (estimated)",
+                    legendgroup="cat$j",
+                    showlegend=(s == 1),
+                    line=attr(color=color, dash="dash")
+                ); row=row, col=col)
+        end
+        relayout!(plt;
+            Symbol("yaxis$(s)") => attr(title="Percentage Frequency", range=[0, 1]),
+            Symbol("xaxis$(s)") => attr(title=(s == S ? "time" : ""))
+        )
+    end
+
+    relayout!(plt, title="Observed vs Estimated Ordinal Proportions",
+        legend_title_text="Category", height=300 + 200 * nrows, width=150 + 600 * ncols)
+    return plt
+end
+
 
 function create_bernoulli_proportion_plot_fup(
     estimated_props::AbstractMatrix,
@@ -987,7 +1059,8 @@ function compare_estimation_2_data_fup(
     T::Integer=5,
     type::AbstractString="best_fitted",
     observation_type::AbstractString="bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    category_labels::Union{Nothing,Vector{<:AbstractString}}=nothing
 )
     estimated_sim_output = run_simulation_from_estimation(
         est_output;
@@ -1001,7 +1074,12 @@ function compare_estimation_2_data_fup(
         estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
         true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
         create_bernoulli_proportion_plot_fup(estimated_props, true_props; symptom_names=symptom_names)
-
+    elseif observation_type == "ordinal"
+        J = est_output.sim_output.sim_params.sim_hyper.n_obs_tup.ordinal_categories
+        estimated_props = get_ordinal_proportions(estimated_sim_output.observations.ordinal_observations, J)
+        true_props = get_ordinal_proportions(est_output.sim_output.observations.ordinal_observations, J)
+        create_ordinal_proportion_plot_fup(estimated_props, true_props;
+            symptom_names=symptom_names, category_labels=category_labels)
     elseif observation_type == "gaussian"
         # per-time means (one subplot per symptom)
         est_gauss = estimated_sim_output.observations.gaussian_observations
@@ -1039,157 +1117,6 @@ function summarize_sim_plots(sim_plots; q=0.05)
     return median_props, lower_props, upper_props
 end
 
-
-function compare_estimation_2_data_with_CIs(
-    est_output::EstimationOutput;
-    T::Integer=5,
-    type::AbstractString="best_fitted",
-    observation_type::AbstractString="bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing
-)
-    # plt = make_subplots(rows=4, cols=3; shared_xaxes=true, vertical_spacing=0.06, subplot_titles=symptom_names)
-    sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
-    true_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
-    for simulation_seed in 1:10
-        estimated_sim_output = run_simulation_from_estimation(
-            est_output;
-            simulation_seed=simulation_seed,
-            T=T,
-            type=type
-        )
-
-        fig = if observation_type == "bernoulli"
-            # proportions over time (S × T expected after _symptom_time)
-            estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
-            true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
-            create_bernoulli_proportion_plot2(estimated_props, true_props; symptom_names=symptom_names)
-
-        elseif observation_type == "gaussian"
-            # per-time means (one subplot per symptom)
-            est_gauss = estimated_sim_output.observations.gaussian_observations
-            true_gauss = est_output.sim_output.observations.gaussian_observations
-            create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names=symptom_names)
-
-        else
-            error("Unknown observation type: $observation_type (use \"bernoulli\" or \"gaussian\")")
-        end
-        for symptom in 1:length(symptom_names)
-            push!(sim_plots[symptom], fig.plot.data[3*symptom][:y])
-            if simulation_seed == 1
-                push!(true_plots[symptom], fig.plot.data[3*symptom-2][:y])
-            end
-        end
-    end
-    true_props_mat = reduce(vcat, [tp[1]' for tp in true_plots])
-
-    median, lower, upper = summarize_sim_plots(sim_plots; q=0.05)
-
-    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names=symptom_names)
-
-    return fig
-
-end
-
-function compare_estimation_2_data_with_CIs_fup(
-    est_output::EstimationOutput;
-    T::Integer=5,
-    type::AbstractString="best_fitted",
-    observation_type::AbstractString="bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing
-)
-    # plt = make_subplots(rows=4, cols=3; shared_xaxes=true, vertical_spacing=0.06, subplot_titles=symptom_names)
-    sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
-    true_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
-    for simulation_seed in 1:10
-        estimated_sim_output = run_simulation_from_estimation(
-            est_output;
-            simulation_seed=simulation_seed,
-            T=T,
-            type=type
-        )
-
-        fig = if observation_type == "bernoulli"
-            # proportions over time (S × T expected after _symptom_time)
-            estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
-            true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
-            create_bernoulli_proportion_plot_fup(estimated_props, true_props; symptom_names=symptom_names)
-
-        elseif observation_type == "gaussian"
-            # per-time means (one subplot per symptom)
-            est_gauss = estimated_sim_output.observations.gaussian_observations
-            true_gauss = est_output.sim_output.observations.gaussian_observations
-            create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names=symptom_names)
-
-        else
-            error("Unknown observation type: $observation_type (use \"bernoulli\" or \"gaussian\")")
-        end
-        for symptom in 1:length(symptom_names)
-            push!(sim_plots[symptom], fig.plot.data[6*symptom][:y])
-            if simulation_seed == 1
-                push!(true_plots[symptom], fig.plot.data[6*symptom-5][:y])
-            end
-        end
-    end
-    true_props_mat = reduce(vcat, [tp[1]' for tp in true_plots])
-
-    median, lower, upper = summarize_sim_plots(sim_plots; q=0.05)
-
-    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names=symptom_names)
-
-    return fig
-
-end
-
-function compare_estimation_2_data_with_CIs_monthly(
-    est_output::EstimationOutput;
-    T::Integer=5,
-    type::AbstractString="best_fitted",
-    observation_type::AbstractString="bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing
-)
-    sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
-    true_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
-    n_symptoms = length(symptom_names)
-    for simulation_seed in 1:10
-        estimated_sim_output = run_simulation_from_estimation(
-            est_output;
-            simulation_seed=simulation_seed,
-            T=T,
-            type=type
-        )
-
-        fig = if observation_type == "bernoulli"
-            # proportions over time (S × T expected after _symptom_time)
-            estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
-            true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
-            create_bernoulli_proportion_plot_monthly(estimated_props, true_props; symptom_names=symptom_names)
-
-        elseif observation_type == "gaussian"
-            # per-time means (one subplot per symptom)
-            est_gauss = estimated_sim_output.observations.gaussian_observations
-            true_gauss = est_output.sim_output.observations.gaussian_observations
-            create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names=symptom_names)
-
-        else
-            error("Unknown observation type: $observation_type (use \"bernoulli\" or \"gaussian\")")
-        end
-        for symptom in 1:n_symptoms
-            push!(sim_plots[symptom], fig.plot.data[2*symptom][:y])
-            if simulation_seed == 1
-                push!(true_plots[symptom], fig.plot.data[2*symptom-1][:y])
-            end
-        end
-    end
-
-    true_props_mat = reduce(vcat, [tp[1]' for tp in true_plots])
-
-    median, lower, upper = summarize_sim_plots(sim_plots; q=0.05)
-
-    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names=symptom_names)
-
-    return fig
-
-end
 
 function plot_median_and_CI(
     median_props::AbstractMatrix,
@@ -1286,6 +1213,137 @@ function plot_median_and_CI(
         legend_title_text="Series",
         height=300 + 200 * nrows,
         width=2000,)
+
+    return plt
+end
+
+function summarize_ordinal_sims(sim_props::AbstractVector; q=0.05)
+    # sim_props: one S × T × J proportion array per kept parameter set
+    S, T, J = size(sim_props[1])
+
+    median_props = fill(NaN, S, T, J)
+    lower_props = fill(NaN, S, T, J)
+    upper_props = fill(NaN, S, T, J)
+
+    for s in 1:S, t in 1:T, j in 1:J
+        vals = filter(!isnan, [p[s, t, j] for p in sim_props])
+        isempty(vals) && continue
+
+        median_props[s, t, j] = median(vals)
+        lower_props[s, t, j] = quantile(vals, q / 2)
+        upper_props[s, t, j] = quantile(vals, 1 - q / 2)
+    end
+
+    return median_props, lower_props, upper_props
+end
+
+function plot_ordinal_median_and_CI(
+    median_props::AbstractArray{<:Real,3},
+    lower_props::AbstractArray{<:Real,3},
+    upper_props::AbstractArray{<:Real,3},
+    true_props::AbstractArray{<:Real,3};
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    category_labels::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    quantile::Float64=0.05
+)
+    @assert size(median_props) == size(true_props)
+    @assert size(lower_props) == size(true_props)
+    @assert size(upper_props) == size(true_props)
+
+    S, T, J = size(true_props)
+
+    titles = isnothing(symptom_names) ? _subplot_titles(S, "Ordinal proportion") : symptom_names
+    titles = reshape(string.(titles), S, 1)
+    category_labels = isnothing(category_labels) ? string.(0:(J-1)) : category_labels
+    # ordered palette: light (no symptom) -> dark (severe), as rgb so the CI band can be transparent
+    palette = [(148, 163, 184), (249, 115, 22), (185, 28, 28), (124, 58, 237), (15, 118, 110)]
+
+    ncols = min(S, 3)
+    nrows = cld(S, ncols)
+    plt = make_subplots(
+        rows=nrows,
+        cols=ncols;
+        shared_xaxes=true,
+        vertical_spacing=0.02,
+        horizontal_spacing=0.02,
+        subplot_titles=titles
+    )
+
+    xs = collect(1:T)
+
+    for s in 1:S
+        row = div(s - 1, ncols) + 1
+        col = mod(s - 1, ncols) + 1
+
+        for j in 1:J
+            r, g, b = palette[mod1(j, length(palette))]
+            group = "cat$j"
+
+            # upper CI
+            add_trace!(plt, PlotlyJS.scatter(
+                    x=xs,
+                    y=vec(upper_props[s, :, j]),
+                    mode="lines",
+                    line=attr(width=0),
+                    legendgroup=group,
+                    showlegend=false,
+                    name="Upper CI"
+                ); row=row, col=col)
+
+            # lower CI + shaded fill
+            add_trace!(plt, PlotlyJS.scatter(
+                    x=xs,
+                    y=vec(lower_props[s, :, j]),
+                    mode="lines",
+                    line=attr(width=0),
+                    fill="tonexty",
+                    fillcolor="rgba($r,$g,$b,0.2)",
+                    legendgroup=group,
+                    showlegend=false,
+                    name=string((1 - quantile) * 100) * "% CI"
+                ); row=row, col=col)
+
+            # median estimate
+            add_trace!(plt, PlotlyJS.scatter(
+                    x=xs,
+                    y=vec(median_props[s, :, j]),
+                    mode="lines+markers",
+                    line=attr(color="rgb($r,$g,$b)"),
+                    legendgroup=group,
+                    name="$(category_labels[j]) (median estimate)",
+                    showlegend=(s == 1)
+                ); row=row, col=col)
+
+            # true values
+            add_trace!(plt, PlotlyJS.scatter(
+                    x=xs,
+                    y=vec(true_props[s, :, j]),
+                    mode="lines+markers",
+                    line=attr(color="rgb($r,$g,$b)", dash="dash"),
+                    legendgroup=group,
+                    name="$(category_labels[j]) (true)",
+                    showlegend=(s == 1)
+                ); row=row, col=col)
+        end
+
+        relayout!(plt;
+            Symbol("yaxis$(s)") => attr(
+                title=col == 1 ? "Percentage Frequency" : "",
+                titlefont=attr(size=14),
+                range=[0, 1]
+            ),
+            Symbol("xaxis$(s)") => attr(
+                title=(row == nrows ? "time" : ""),
+                titlefont=attr(size=14)
+            )
+        )
+    end
+
+    relayout!(plt,
+        title="Observed vs Estimated Ordinal Proportions",
+        legend_title_text="Category",
+        height=300 + 200 * nrows,
+        width=150 + 600 * ncols,)
 
     return plt
 end
@@ -1457,7 +1515,6 @@ function extract_rtrans_range(rho_vec, x_vec)
     lo = minimum(aggr_vals)#floor(minimum(aggr_vals))
     hi = maximum(aggr_vals)#ceil(maximum(aggr_vals))
     step = (hi - lo) / 5
-    println("Aggregated covariate values range from $lo to $hi")
     return lo:step:hi
 end
 
@@ -1467,7 +1524,6 @@ function extract_rtrans_hist(rho_vec, x_vec)
         aggr_val = get_aggr_covars(rho_vec, x_vec[patient, :])
         push!(aggr_vals, aggr_val)
     end
-    print(countmap(aggr_vals))
     return countmap(aggr_vals)
 end
 
@@ -1476,6 +1532,7 @@ function ensemble_uq_fup(
     T::Integer=5,
     observation_type::AbstractString="bernoulli",
     symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    category_labels::Union{Nothing,Vector{<:AbstractString}}=nothing,
     num_multistarts::Integer=10
 )
 
@@ -1498,7 +1555,12 @@ function ensemble_uq_fup(
                 estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
                 true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
                 create_bernoulli_proportion_plot_fup(estimated_props, true_props; symptom_names=symptom_names)
-
+            elseif observation_type == "ordinal"
+                J = est_output.sim_output.sim_params.sim_hyper.n_obs_tup.ordinal_categories
+                estimated_props = get_ordinal_proportions(estimated_sim_output.observations.ordinal_observations, J)
+                true_props = get_ordinal_proportions(est_output.sim_output.observations.ordinal_observations, J)
+                create_ordinal_proportion_plot_fup(estimated_props, true_props;
+                symptom_names=symptom_names, category_labels=category_labels)
             elseif observation_type == "gaussian"
                 # per-time means (one subplot per symptom)
                 est_gauss = estimated_sim_output.observations.gaussian_observations
@@ -1532,6 +1594,7 @@ function ensemble_uq_monthly_stats(
     observation_type::AbstractString="bernoulli",
     num_multistarts::Integer=10,
     symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    category_labels::Union{Nothing,Vector{<:AbstractString}}=nothing,
     quantile::Float64=0.05
 )
 
@@ -1553,7 +1616,12 @@ function ensemble_uq_monthly_stats(
                 estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
                 true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
                 create_bernoulli_proportion_plot_monthly(estimated_props, true_props; symptom_names=symptom_names)
-
+            elseif observation_type == "ordinal"
+                J = est_output.sim_output.sim_params.sim_hyper.n_obs_tup.ordinal_categories
+                estimated_props = get_ordinal_proportions(estimated_sim_output.observations.ordinal_observations, J)
+                true_props = get_ordinal_proportions(est_output.sim_output.observations.ordinal_observations, J)
+                create_ordinal_proportion_plot_fup(estimated_props, true_props;
+                symptom_names=symptom_names, category_labels=category_labels)
             elseif observation_type == "gaussian"
                 # per-time means (one subplot per symptom)
                 est_gauss = estimated_sim_output.observations.gaussian_observations
@@ -1635,6 +1703,7 @@ function ensemble_uq_monthly_return_traces(
     T::Integer=5,
     observation_type::AbstractString="bernoulli",
     symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    category_labels::Union{Nothing,Vector{<:AbstractString}}=nothing,
     quantile::Float64=0.05
 )
     all_params = est_output.all_model_params
@@ -1660,6 +1729,23 @@ function ensemble_uq_monthly_return_traces(
         end
     end
 
+    # ordinal: J lines per symptom, so work on the S × T × J proportions directly
+    if observation_type == "ordinal"
+        J = est_output.sim_output.sim_params.sim_hyper.n_obs_tup.ordinal_categories
+        true_props = get_ordinal_proportions(est_output.sim_output.observations.ordinal_observations, J)
+        sim_props = [get_ordinal_proportions(
+            run_simulation_from_model_params(
+                est_output;
+                simulation_seed=1,
+                T=T,
+                model_params=params
+            ).observations.ordinal_observations, J) for params in kept_params_list]
+
+        median_props, lower_props, upper_props = summarize_ordinal_sims(sim_props; q=quantile)
+        return plot_ordinal_median_and_CI(median_props, lower_props, upper_props, true_props;
+            symptom_names=symptom_names, category_labels=category_labels, quantile=quantile)
+    end
+
     sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
     true_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
     for params in kept_params_list
@@ -1677,7 +1763,6 @@ function ensemble_uq_monthly_return_traces(
             estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
             true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
             create_bernoulli_proportion_plot_monthly(estimated_props, true_props; symptom_names=symptom_names)
-
         elseif observation_type == "gaussian"
             # per-time means (one subplot per symptom)
             est_gauss = estimated_sim_output.observations.gaussian_observations
@@ -1709,6 +1794,7 @@ function ensemble_uq_monthly_startingparams(
     T::Integer=5,
     observation_type::AbstractString="bernoulli",
     symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    category_labels::Union{Nothing,Vector{<:AbstractString}}=nothing,
     num_multistarts::Integer=10,
     quantile::Float64=0.05
 )
@@ -1732,6 +1818,13 @@ function ensemble_uq_monthly_startingparams(
                 estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
                 true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
                 create_bernoulli_proportion_plot_monthly(estimated_props, true_props; symptom_names=symptom_names)
+            
+            elseif observation_type == "ordinal"
+                J = est_output.sim_output.sim_params.sim_hyper.n_obs_tup.ordinal_categories
+                estimated_props = get_ordinal_proportions(estimated_sim_output.observations.ordinal_observations, J)
+                true_props = get_ordinal_proportions(est_output.sim_output.observations.ordinal_observations, J)
+                create_ordinal_proportion_plot_fup(estimated_props, true_props;
+                symptom_names=symptom_names, category_labels=category_labels)
 
             elseif observation_type == "gaussian"
                 # per-time means (one subplot per symptom)
@@ -1755,61 +1848,6 @@ function ensemble_uq_monthly_startingparams(
     median, lower, upper = summarize_sim_plots(sim_plots; q=quantile)
 
     fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names=symptom_names, quantile=quantile)
-
-    return fig
-
-end
-
-function ensemble_uq(
-    est_output::EstimationOutput;
-    T::Integer=5,
-    observation_type::AbstractString="bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
-    num_multistarts::Integer=10
-)
-
-    lkl_idx = sortperm(est_output.fitted_log_lkl_list)
-    # plt = make_subplots(rows=4, cols=3; shared_xaxes=true, vertical_spacing=0.06, subplot_titles=symptom_names)
-    sim_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
-    true_plots = [Vector{Any}() for _ in 1:length(symptom_names)]
-    for multistart in 1:num_multistarts
-
-        for simulation_seed in 1:10
-            estimated_sim_output = run_simulation_from_model_params(
-                est_output;
-                simulation_seed=simulation_seed,
-                T=T,
-                model_params=est_output.fitted_model_params[lkl_idx][multistart]
-            )
-
-            fig = if observation_type == "bernoulli"
-                # proportions over time (S × T expected after _symptom_time)
-                estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
-                true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
-                create_bernoulli_proportion_plot2(estimated_props, true_props; symptom_names=symptom_names)
-
-            elseif observation_type == "gaussian"
-                # per-time means (one subplot per symptom)
-                est_gauss = estimated_sim_output.observations.gaussian_observations
-                true_gauss = est_output.sim_output.observations.gaussian_observations
-                create_gaussian_mean_plot(est_gauss, true_gauss; symptom_names=symptom_names)
-
-            else
-                error("Unknown observation type: $observation_type (use \"bernoulli\" or \"gaussian\")")
-            end
-            for symptom in 1:length(symptom_names)
-                push!(sim_plots[symptom], fig.plot.data[3*symptom][:y])
-                if simulation_seed == 1
-                    push!(true_plots[symptom], fig.plot.data[3*symptom-2][:y])
-                end
-            end
-        end
-    end
-    true_props_mat = reduce(vcat, [tp[1]' for tp in true_plots])
-
-    median, lower, upper = summarize_sim_plots(sim_plots; q=0.05)
-
-    fig = plot_median_and_CI(median, lower, upper, true_props_mat; symptom_names=symptom_names)
 
     return fig
 
@@ -1963,4 +2001,42 @@ function savefig_auto(fig, path; kwargs...)
     w = get(layout.fields, :width, 700)   # Fallback falls nicht gesetzt
     h = get(layout.fields, :height, 500)
     PlotlyJS.savefig(fig, path; width=w, height=h, kwargs...)
+end
+
+function plot_ordinal_heatmaps(
+    model_params::NamedTuple;
+    ordinal_labels=nothing,
+    category_labels=nothing
+)
+    # one panel per ordinal symptom: states × categories, rows sum to 1
+    ord_probs = get_ordinal_probs(model_params.emissions.beta_ordinal)   # S × M × J
+    M, J = size(ord_probs, 2), size(ord_probs, 3)
+    ordinal_labels = isnothing(ordinal_labels) ? ["Ordinal $m" for m in 1:M] : ordinal_labels
+    category_labels = isnothing(category_labels) ? string.(0:(J-1)) : category_labels
+
+    # grid layout like the proportion plots, titles filled row by row and padded for empty panels
+    ncols = min(M, 3)
+    nrows = cld(M, ncols)
+    titles = vcat(string.(ordinal_labels), fill("", nrows * ncols - M))
+    titles = permutedims(reshape(titles, ncols, nrows))
+
+    fig = PlotlyJS.make_subplots(
+        rows=nrows, cols=ncols,
+        subplot_titles=titles,
+        horizontal_spacing=0.03,
+        vertical_spacing=min(0.08, 0.3 / nrows)
+    )
+    for m in 1:M
+        row = div(m - 1, ncols) + 1
+        col = mod(m - 1, ncols) + 1
+        tr = plot_single_bernoulli_probs(ord_probs[:, m, :]; symptom_labels=category_labels)
+        tr[:showscale] = (m == M)              # one shared colour bar on the right
+        add_trace!(fig, tr, row=row, col=col)
+        if col > 1                             # state labels only in the first column
+            relayout!(fig; Symbol("yaxis$(m)_showticklabels") => false)
+        end
+    end
+    relayout!(fig, width=150 + 600 * ncols, height=100 + 300 * nrows)
+
+    return fig
 end
