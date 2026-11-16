@@ -21,10 +21,20 @@ function export_best_emission_matrices(sim_dir::String, out_file::String)
             )
             best_model_params = LTA.get_model_params(estimation_output, type="best_fitted")
 
-            em_states = LTA.get_bernoulli_probs(
-                best_model_params.emissions.beta_bernoulli,
-                sim_params.covariate_mat[1, :][covariate_idx[:em]]
-            )
+            em = best_model_params.emissions
+            feats = Matrix{Float64}[]
+            if haskey(em, :beta_bernoulli)   # any symptoms you kept binary
+                push!(feats, LTA.get_bernoulli_probs(em.beta_bernoulli,
+                                                    sim_params.covariate_mat[1, :][covariate_idx[:em]]))
+            end
+            if haskey(em, :beta_ordinal)
+                p = LTA.get_ordinal_probs(em.beta_ordinal)                      # S × L × J
+                p_geq = reverse(cumsum(reverse(p, dims=3), dims=3), dims=3)     # P(X ≥ k-1)
+                p_geq = p_geq[:, :, 2:end]                                      # drop P(≥0)=1 → S × L × (J-1)
+                push!(feats, reshape(p_geq, size(p, 1), :))                     # S × (L·(J-1))
+            end
+            em_states = reduce(hcat, feats)
+
             write(f, "em_states_" * string(n_states), em_states)
 
         end
@@ -46,10 +56,20 @@ function export_emission_matrices_multistarts(sim_dir::String, out_file::String,
             )
             best_model_params = LTA.get_model_params(estimation_output, type=multistart)
 
-            em_states = LTA.get_bernoulli_probs(
-                best_model_params.emissions.beta_bernoulli,
-                sim_params.covariate_mat[1, :][covariate_idx[:em]]
-            )
+            em = best_model_params.emissions
+            feats = Matrix{Float64}[]
+            if haskey(em, :beta_bernoulli)   # any symptoms you kept binary
+                push!(feats, LTA.get_bernoulli_probs(em.beta_bernoulli,
+                                                    sim_params.covariate_mat[1, :][covariate_idx[:em]]))
+            end
+            if haskey(em, :beta_ordinal)
+                p = LTA.get_ordinal_probs(em.beta_ordinal)                      # S × L × J
+                p_geq = reverse(cumsum(reverse(p, dims=3), dims=3), dims=3)     # P(X ≥ k-1)
+                p_geq = p_geq[:, :, 2:end]                                      # drop P(≥0)=1 → S × L × (J-1)
+                push!(feats, reshape(p_geq, size(p, 1), :))                     # S × (L·(J-1))
+            end
+            em_states = reduce(hcat, feats)
+
             write(f, "em_states_multistart_" * string(multistart), em_states)
 
         end

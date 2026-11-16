@@ -43,7 +43,8 @@ symptoms = [
     "sleep_disorder",
     "vertigo"]
 
-symptoms = [symptom.replace("_", " ").title() for symptom in symptoms]
+symptoms = [s.replace("_", " ").title() for s in symptoms]
+row_labels = [f"{s} (≥ little)" for s in symptoms] + [f"{s} (strong)" for s in symptoms]
 
 
 def build_state_feature_matrix(est_emission_list):
@@ -144,7 +145,7 @@ im = ax_heatmap.imshow(
 ax_heatmap.set_xticks(range(len(labels_ordered)))
 ax_heatmap.set_xticklabels(labels_ordered, rotation=90)
 ax_heatmap.set_yticks(range(state_feature_matrix.shape[1]))
-ax_heatmap.set_yticklabels(symptoms)
+ax_heatmap.set_yticklabels(row_labels)
 
 fig.colorbar(im, cax=ax_cbar)
 
