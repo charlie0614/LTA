@@ -244,6 +244,27 @@ def remove_all_missing_followups(df: pd.DataFrame) -> pd.DataFrame:
     return df[~all_missing]
 
 
+def split_train_test(df: pd.DataFrame, out_path: Path, test_frac: float = 0.2,
+                     seed: int = 42) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    if not 0 < test_frac < 1:
+        raise ValueError("test_frac must be in (0, 1)")
+    n = len(df)
+    n_test = int(round(test_frac * n))
+    rng = np.random.default_rng(seed)
+    test_mask = np.zeros(n, dtype=bool)
+    test_mask[rng.choice(n, size=n_test, replace=False)] = True
+
+    test_df = df.iloc[test_mask]
+    train_df = df.iloc[~test_mask]
+
+    out_path = Path(out_path)
+    test_df.to_csv(out_path.with_name(
+        f"{out_path.stem}_test.csv"), index=False)
+    train_df.to_csv(out_path.with_name(
+        f"{out_path.stem}_train.csv"), index=False)
+    return train_df, test_df
+
+
 def preprocess_file(in_path: Path, out_path: Path, age_categories: List[str] = AGE_CATEGORIES) -> pd.DataFrame:
     df = pd.read_csv(in_path).fillna(-1)
     df = is_healed(df)
@@ -266,8 +287,14 @@ def main() -> None:
         "infile", nargs="?", default="data/DigiHero/2026-07-20_data_symptoms_DigiHero_Bonn.csv")
     parser.add_argument(
         "outfile", nargs="?", default="data/DigiHero/2026-07-20_data_symptoms_DigiHero_Bonn_preprocessed_ordinal.csv")
+    parser.add_argument("--test-frac", type=float, default=None,
+                        help="if set, also write <outfile>_test.csv / <outfile>_train.csv with this test fraction")
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
-    preprocess_file(Path(args.infile), Path(args.outfile))
+    df = preprocess_file(Path(args.infile), Path(args.outfile))
+    if args.test_frac is not None:
+        split_train_test(df, Path(args.outfile),
+                         test_frac=args.test_frac, seed=args.seed)
 
 
 if __name__ == "__main__":
