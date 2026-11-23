@@ -10,9 +10,22 @@ using Plots
 ######### PREPROCESSING ##########
 
 sim_dir = "data/DigiHero/"
-n_states = 5
-sim_no = string("2026_07_20/", n_states, "states/age_sex_comorbidity_covs_fups_all_symptoms_all_steps")
-combined_all = CSV.read(sim_dir * "2026-07-20_data_symptoms_DigiHero_Bonn_preprocessed.csv", DataFrame, missingstring=["", "NA"]);
+n_states = 3
+sim_no = string("2026_07_20/", n_states, "states/age_sex_comorbidity_covs_fups_ordinal_predictioncheck")
+combined_all_train = CSV.read(sim_dir * "2026-07-20_data_symptoms_DigiHero_Bonn_preprocessed_ordinal_train.csv", DataFrame, missingstring=["", "NA"]);
+
+println("Running simulation with ", sim_no)
+
+pattern = Regex(join(vcat(symptoms_list_binary, symptoms_list_ordinal, covariates_list_new_agegroups), "|"))
+preprocessed_df = select(combined_all_train, names(combined_all_train, pattern))
+preprocessed_df = preprocessed_df[:, 3:end]
+
+preprocessed_df = filter(row -> !all(ismissing, row[Not(covariates_list_new_agegroups)]), preprocessed_df)
+
+train_sim_output = LTA.create_sim_mod_data(preprocessed_df; covs=covariates_list_new_agegroups, bins=String[], ordinals=symptoms_list_ordinal, conts=String[], visits=String[], labels=["pcc_" * string(timepoints) * "months_sym_" for timepoints in collect(6:6:30)], n_states=n_states, covariate_tup=(initial=covariates_list_new_agegroups, trans=covariates_list_new_agegroups, em=[]), sim_no=sim_no, comments="")
+
+
+combined_all = CSV.read(sim_dir * "2026-07-20_data_symptoms_DigiHero_Bonn_preprocessed_ordinal.csv", DataFrame, missingstring=["", "NA"]);
 
 println("Running simulation with ", sim_no)
 
@@ -40,7 +53,7 @@ println("Iterations limit reached: ", count(estimation_output.iteration_limit_re
 
 mkpath("outputs/" * sim_no * "/results/plots")
 
-sim_output, sim_params, sim_hyper = LTA.unpack(estimation_output)
+train_sim_output, sim_params, sim_hyper = LTA.unpack(estimation_output)
 covariate_idx = LTA.convert_covariate_2_df_indices(
     sim_params.covariate_mat_headers,
     sim_hyper.covariate_tup
@@ -75,3 +88,9 @@ LTA.savefig_auto(fig, "outputs/" * sim_no * "/results/plots/ensemble_uq_ordinal.
 
 fig = LTA.estimated_states_over_time(estimation_output; T=5, type="best_fitted", n_states=n_states)
 Plots.savefig(fig, "outputs/" * sim_no * "/results/plots/estimated_states_over_time.png")
+
+covariates_df, transition_matrices = LTA.get_transition_matrices(estimation_output, sim_output.sim_params)
+fig_transmat = LTA.plot_transition_matrices(covariates_df, transition_matrices)
+LTA.savefig_auto(fig_transmat, "outputs/" * sim_no * "/results/plots/transition_matrices_covs.png")
+
+# initial_states, transition_matrices = LTA.compute_initial_probs(estimation_output, 1/13)
