@@ -265,7 +265,21 @@ def split_train_test(df: pd.DataFrame, out_path: Path, test_frac: float = 0.2,
     return train_df, test_df
 
 
-def preprocess_file(in_path: Path, out_path: Path, age_categories: List[str] = AGE_CATEGORIES) -> pd.DataFrame:
+def assign_folds(df: pd.DataFrame, k: int = 5, seed: int = 42) -> pd.DataFrame:
+    """Add a column "fold" with random, (almost) equally sized folds 1..k.
+    One row is one patient, so all follow-ups of a patient end up in the same fold."""
+    if k < 2:
+        raise ValueError("k must be at least 2")
+    rng = np.random.default_rng(seed)
+    folds = np.arange(len(df)) % k + 1  # balanced fold sizes
+    rng.shuffle(folds)
+    df = df.copy()
+    df["fold"] = folds
+    return df
+
+
+def preprocess_file(in_path: Path, out_path: Path, age_categories: List[str] = AGE_CATEGORIES,
+                    n_folds: Optional[int] = None, seed: int = 42) -> pd.DataFrame:
     df = pd.read_csv(in_path).fillna(-1)
     df = is_healed(df)
     df = rename_columns(df)
@@ -276,6 +290,8 @@ def preprocess_file(in_path: Path, out_path: Path, age_categories: List[str] = A
     df = map_symptoms_severity_to_ordinal(df, ordinal_cols)
     df = map_symptoms_severity_to_binary(df, binary_cols)
     df = remove_all_missing_followups(df)
+    if n_folds is not None:
+        df = assign_folds(df, k=n_folds, seed=seed)
     df.to_csv(out_path, index=False)
     return df
 
@@ -289,9 +305,12 @@ def main() -> None:
         "outfile", nargs="?", default="data/DigiHero/2026-07-20_data_symptoms_DigiHero_Bonn_preprocessed_ordinal.csv")
     parser.add_argument("--test-frac", type=float, default=None,
                         help="if set, also write <outfile>_test.csv / <outfile>_train.csv with this test fraction")
+    parser.add_argument("--folds", type=int, default=None,
+                        help="if set, add a column 'fold' (1..k) for k-fold cross validation")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
-    df = preprocess_file(Path(args.infile), Path(args.outfile))
+    df = preprocess_file(Path(args.infile), Path(args.outfile),
+                         n_folds=args.folds, seed=args.seed)
     if args.test_frac is not None:
         split_train_test(df, Path(args.outfile),
                          test_frac=args.test_frac, seed=args.seed)

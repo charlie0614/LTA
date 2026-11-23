@@ -14,19 +14,22 @@ est_output_list = [load(save_dr * "/est_output.jld2", "estimation_output") for s
 lkl_list = [minimum(est_output.fitted_log_lkl_list) for est_output in est_output_list]
 
 
+n_params(est_output::LTA.EstimationOutput) =
+    length(LTA.model_params_2_param_vec(est_output.fitted_model_params[1]))
+
 function get_AIC(est_output::LTA.EstimationOutput)
 
-    k = length(est_output.fitted_model_params[1])
-    aic = 2 * k + minimum(est_output.fitted_log_lkl_list)
+    k = n_params(est_output)
+    aic = 2 * k + 2 * minimum(est_output.fitted_log_lkl_list)
 
     return aic
 end
 
 function get_BIC(est_output::LTA.EstimationOutput)
 
-    k = length(est_output.fitted_model_params[1])
+    k = n_params(est_output)
     N = est_output.sim_output.sim_params.sim_hyper.N
-    bic = k * log(N) + minimum(est_output.fitted_log_lkl_list)
+    bic = k * log(N) + 2 * minimum(est_output.fitted_log_lkl_list)
 
     return bic
 end
