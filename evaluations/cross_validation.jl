@@ -6,6 +6,13 @@
 # and the negative log-likelihood is evaluated on fold k with the fitted parameters.
 # Every patient is held out exactly once, so the held-out NLL summed over the folds
 # is comparable across models (lower is better).
+#
+# Run one job per number of states (or per number of states and fold):
+#   julia evaluations/cross_validation.jl 5        # 5 states, all folds
+#   julia evaluations/cross_validation.jl 5 2      # 5 states, fold 2 only
+#   julia evaluations/cross_validation.jl          # everything, sequentially
+# Each fit writes its own row to <out_dir>/fold_results/. When all jobs are done,
+# evaluations/cv_model_selection.jl combines them and makes the model selection plots.
 
 include("../src/LTA.jl")
 include("../digihero_params.jl")
@@ -21,7 +28,7 @@ using Plots
 
 data_file = "data/DigiHero/2026-07-20_data_symptoms_DigiHero_Bonn_preprocessed_ordinal.csv"
 out_dir = "outputs/2026_07_20/cross_validation/"
-n_state_list = 3:10
+n_state_list = length(ARGS) >= 1 ? [parse(Int, ARGS[1])] : 3:10
 n_starts = 10          # per fold; fewer than the full fit to keep the run time manageable
 iterations = 500
 est_seed = 1
@@ -34,6 +41,7 @@ time_labels = ["pcc_" * string(t) * "months_sym_" for t in 6:6:30]
 combined_all = CSV.read(data_file, DataFrame, missingstring=["", "NA"])
 @assert "fold" in names(combined_all) "No fold column: run `python preprocessing_combined.py --folds 5` first"
 folds = sort(unique(combined_all.fold))
+fold_list = length(ARGS) >= 2 ? [parse(Int, ARGS[2])] : folds
 
 # same column selection and row filter as LTA_DigiHero.jl
 pattern = Regex(join(vcat(symptoms_list_ordinal, covs), "|"))
@@ -92,11 +100,10 @@ end
 
 ######### CROSS VALIDATION ##########
 
-mkpath(out_dir)
-results = DataFrame(n_states=Int[], fold=Int[], n_train=Int[], n_test=Int[],
-    nll_train=Float64[], nll_test=Float64[])
+result_dir = out_dir * "fold_results/"
+mkpath(result_dir)
 
-for n_states in n_state_list, k in folds
+for n_states in n_state_list, k in fold_list
     sim_no = string("cross_validation/", n_states, "states/fold", k)
     train_sim = make_sim(prepare(combined_all[combined_all.fold .!= k, :]), n_states, sim_no)
     test_sim = make_sim(prepare(combined_all[combined_all.fold .== k, :]), n_states, sim_no)
@@ -117,47 +124,10 @@ for n_states in n_state_list, k in folds
     best_params = LTA.get_model_params(estimation_output, type="best_fitted")
     params_vec = LTA.model_params_2_param_vec(best_params)
 
-    push!(results, (n_states, k, n_patients(train_sim), n_patients(test_sim),
-        minimum(estimation_output.fitted_log_lkl_list),
-        LTA.get_lkl_val(params_vec, test_sim)))   # lambda = 0: plain negative log-likelihood
-    CSV.write(out_dir * "cv_folds.csv", results)
+    # one file per fit, so parallel jobs never write to the same file
+    row = DataFrame(n_states=n_states, fold=k, n_folds=length(folds),
+        n_train=n_patients(train_sim), n_test=n_patients(test_sim),
+        nll_train=minimum(estimation_output.fitted_log_lkl_list),
+        nll_test=LTA.get_lkl_val(params_vec, test_sim))   # lambda = 0: plain negative log-likelihood
+    CSV.write(result_dir * string(n_states, "states_fold", k, ".csv"), row)
 end
-
-######### SUMMARY ##########
-
-cv_summary = combine(groupby(results, :n_states),
-    :nll_test => sum => :nll_test_total,
-    [:nll_test, :n_test] => ((l, n) -> sum(l) / sum(n)) => :nll_test_per_patient,
-    [:nll_test, :n_test] => ((l, n) -> std(l ./ n)) => :sd_across_folds)
-CSV.write(out_dir * "cv_summary.csv", cv_summary)
-println(cv_summary)
-
-######### MODEL SELECTION PLOTS ##########
-
-xaxis = PlotlyJS.attr(title="Number of states", tickmode="linear", dtick=1)
-
-# total held-out NLL, same as test_nll.png from the prediction check
-p_total = PlotlyJS.plot(PlotlyJS.bar(x=cv_summary.n_states, y=cv_summary.nll_test_total),
-    PlotlyJS.Layout(title="$(length(folds))-fold cross validation", xaxis=xaxis,
-        yaxis=PlotlyJS.attr(title="Held-out NLL (sum over folds)"), width=800, height=500))
-PlotlyJS.savefig(p_total, out_dir * "cv_nll_total.png", width=800, height=500)
-
-# per patient: mean ± sd across folds, single folds as faint lines, training NLL for the overfitting gap
-results.nll_test_pp = results.nll_test ./ results.n_test
-results.nll_train_pp = results.nll_train ./ results.n_train
-traces = PlotlyJS.GenericTrace[]
-for k in folds
-    r = sort(results[results.fold .== k, :], :n_states)
-    push!(traces, PlotlyJS.scatter(x=r.n_states, y=r.nll_test_pp, mode="lines+markers",
-        line=PlotlyJS.attr(color="lightgray"), marker=PlotlyJS.attr(color="lightgray"),
-        name="fold $k", showlegend=false))
-end
-train_summary = combine(groupby(results, :n_states), :nll_train_pp => mean => :nll_train_pp)
-push!(traces, PlotlyJS.scatter(x=train_summary.n_states, y=train_summary.nll_train_pp,
-    mode="lines+markers", line=PlotlyJS.attr(dash="dash"), name="training"))
-push!(traces, PlotlyJS.scatter(x=cv_summary.n_states, y=cv_summary.nll_test_per_patient,
-    error_y=PlotlyJS.attr(type="data", array=cv_summary.sd_across_folds, visible=true),
-    mode="lines+markers", name="held-out (mean ± sd over folds)"))
-p_pp = PlotlyJS.plot(traces, PlotlyJS.Layout(title="$(length(folds))-fold cross validation",
-    xaxis=xaxis, yaxis=PlotlyJS.attr(title="NLL per patient"), width=900, height=500))
-PlotlyJS.savefig(p_pp, out_dir * "cv_nll_per_patient.png", width=900, height=500)
