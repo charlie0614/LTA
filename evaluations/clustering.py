@@ -44,7 +44,7 @@ symptoms = [
     "vertigo"]
 
 symptoms = [s.replace("_", " ").title() for s in symptoms]
-row_labels = [f"{s} (≥ little)" for s in symptoms] + [f"{s} (strong)" for s in symptoms]
+row_labels = symptoms
 
 
 def build_state_feature_matrix(est_emission_list):
@@ -92,7 +92,7 @@ def compute_hierarch_clustering(corr_pairwdist,
     return cluster_hierarch, max_coph_dist_mat
 
 
-sim_no = "age_sex_comorbidity_covs_fups_all_symptoms"
+sim_no = "age_sex_comorbidity_covs_fups_ordinal_binary"
 with h5py.File(f"outputs/2026_07_20/est_emission_mats_{sim_no}.h5", "r") as f:
     est_emission_mat_list = [f[f'em_states_{i+1}'][:] for i in range(2, 10)]
 
@@ -106,7 +106,7 @@ pairwdist = pdist(state_feature_matrix, metric='euclidean')
 cluster_hierarch, coph_dist_mat = compute_hierarch_clustering(
     pairwdist, methods='complete')
 
-fig = plt.figure(figsize=(12, 6))
+fig = plt.figure(figsize=(12, 10))
 gs = fig.add_gridspec(
     2, 2,
     height_ratios=[1, 1.5],
@@ -149,5 +149,5 @@ ax_heatmap.set_yticklabels(row_labels)
 
 fig.colorbar(im, cax=ax_cbar)
 
-plt.savefig("outputs/2026_07_20/clustering_all_symptoms.png",
+plt.savefig("outputs/2026_07_20/clustering_ordinal_binary.png",
             bbox_inches='tight', dpi=300)
