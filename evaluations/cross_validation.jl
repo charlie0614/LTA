@@ -14,6 +14,8 @@ using CSV
 using DataFrames
 using JLD2
 using Statistics
+using PlotlyJS
+using Plots
 
 ######### SETTINGS ##########
 
@@ -54,6 +56,40 @@ n_patients(sim_output) = LTA.unpack(sim_output)[2].N
 # the parameter vector of the training fit does not match the test data
 J_full = n_categories(make_sim(prepare(combined_all), first(n_state_list), "cv_check"))
 
+######### EVALUATION PLOTS PER FIT ##########
+
+make_fit_plots = true   # the plots of LTA_DigiHero.jl for every (n_states, fold) fit
+category_labels = ["0: not present", "1: little", "2: strong"]
+
+function plot_fit(estimation_output, plot_dir::String, n_states::Int)
+    mkpath(plot_dir)
+    _, sim_params, _ = LTA.unpack(estimation_output)
+    best_model_params = LTA.get_model_params(estimation_output, type="best_fitted")
+
+    fig_ord = LTA.plot_ordinal_heatmaps(best_model_params;
+        ordinal_labels=symptoms_list_ordinal, category_labels=category_labels)
+    LTA.savefig_auto(fig_ord, plot_dir * "emission_matrix_ordinal.png")
+
+    fig_ord_time = LTA.compare_estimation_2_data_fup(estimation_output; T=5, observation_type="ordinal",
+        symptom_names=symptoms_list_ordinal, category_labels=category_labels)
+    LTA.savefig_auto(fig_ord_time, plot_dir * "compare_est_2_data_ordinal.png")
+
+    LTA.savefig_auto(LTA.waterfall_plot(estimation_output), plot_dir * "waterfall.png")
+
+    rtrans_range = LTA.extract_rtrans_range(best_model_params.rho_trans, sim_params.covariate_mat)
+    LTA.savefig_auto(LTA.plot_transition_matrices(best_model_params.beta_transition, rtrans_range),
+        plot_dir * "transition_matrices_covs.png")
+    LTA.savefig_auto(LTA.plot_initial_probs(best_model_params.beta_initial, rtrans_range),
+        plot_dir * "initial_probs_covs.png")
+
+    fig_uq = LTA.ensemble_uq_monthly_return_traces(estimation_output; T=5,
+        symptom_names=symptoms_list_ordinal, observation_type="ordinal")
+    LTA.savefig_auto(fig_uq, plot_dir * "ensemble_uq_ordinal.png")
+
+    fig_states = LTA.estimated_states_over_time(estimation_output; T=5, type="best_fitted", n_states=n_states)
+    Plots.savefig(fig_states, plot_dir * "estimated_states_over_time.png")
+end
+
 ######### CROSS VALIDATION ##########
 
 mkpath(out_dir)
@@ -76,6 +112,7 @@ for n_states in n_state_list, k in folds
             n_starts=n_starts, iterations=iterations)
         save(est_file, "estimation_output", estimation_output)
     end
+    make_fit_plots && plot_fit(estimation_output, out_dir * string(n_states, "states/fold", k, "/plots/"), n_states)
 
     best_params = LTA.get_model_params(estimation_output, type="best_fitted")
     params_vec = LTA.model_params_2_param_vec(best_params)
@@ -88,9 +125,39 @@ end
 
 ######### SUMMARY ##########
 
-summary = combine(groupby(results, :n_states),
+cv_summary = combine(groupby(results, :n_states),
     :nll_test => sum => :nll_test_total,
     [:nll_test, :n_test] => ((l, n) -> sum(l) / sum(n)) => :nll_test_per_patient,
     [:nll_test, :n_test] => ((l, n) -> std(l ./ n)) => :sd_across_folds)
-CSV.write(out_dir * "cv_summary.csv", summary)
-println(summary)
+CSV.write(out_dir * "cv_summary.csv", cv_summary)
+println(cv_summary)
+
+######### MODEL SELECTION PLOTS ##########
+
+xaxis = PlotlyJS.attr(title="Number of states", tickmode="linear", dtick=1)
+
+# total held-out NLL, same as test_nll.png from the prediction check
+p_total = PlotlyJS.plot(PlotlyJS.bar(x=cv_summary.n_states, y=cv_summary.nll_test_total),
+    PlotlyJS.Layout(title="$(length(folds))-fold cross validation", xaxis=xaxis,
+        yaxis=PlotlyJS.attr(title="Held-out NLL (sum over folds)"), width=800, height=500))
+PlotlyJS.savefig(p_total, out_dir * "cv_nll_total.png", width=800, height=500)
+
+# per patient: mean ± sd across folds, single folds as faint lines, training NLL for the overfitting gap
+results.nll_test_pp = results.nll_test ./ results.n_test
+results.nll_train_pp = results.nll_train ./ results.n_train
+traces = PlotlyJS.GenericTrace[]
+for k in folds
+    r = sort(results[results.fold .== k, :], :n_states)
+    push!(traces, PlotlyJS.scatter(x=r.n_states, y=r.nll_test_pp, mode="lines+markers",
+        line=PlotlyJS.attr(color="lightgray"), marker=PlotlyJS.attr(color="lightgray"),
+        name="fold $k", showlegend=false))
+end
+train_summary = combine(groupby(results, :n_states), :nll_train_pp => mean => :nll_train_pp)
+push!(traces, PlotlyJS.scatter(x=train_summary.n_states, y=train_summary.nll_train_pp,
+    mode="lines+markers", line=PlotlyJS.attr(dash="dash"), name="training"))
+push!(traces, PlotlyJS.scatter(x=cv_summary.n_states, y=cv_summary.nll_test_per_patient,
+    error_y=PlotlyJS.attr(type="data", array=cv_summary.sd_across_folds, visible=true),
+    mode="lines+markers", name="held-out (mean ± sd over folds)"))
+p_pp = PlotlyJS.plot(traces, PlotlyJS.Layout(title="$(length(folds))-fold cross validation",
+    xaxis=xaxis, yaxis=PlotlyJS.attr(title="NLL per patient"), width=900, height=500))
+PlotlyJS.savefig(p_pp, out_dir * "cv_nll_per_patient.png", width=900, height=500)
