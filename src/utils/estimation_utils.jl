@@ -991,7 +991,11 @@ end
 function sum_alpha_across_states(
     alpha_T::Matrix{<:Real},
 )
-    out = log.(sum(exp.(alpha_T), dims=2))
+    # log-sum-exp over states; subtracting the maximum keeps exp from underflowing to 0
+    # when a patient's log-likelihood is very negative (many observations)
+    m = maximum(alpha_T, dims=2)
+    m = ifelse.(isfinite.(m), m, zero(eltype(m)))   # all states -Inf: avoid -Inf - -Inf = NaN
+    out = m .+ log.(sum(exp.(alpha_T .- m), dims=2))
 
     return vec(out)
 end
