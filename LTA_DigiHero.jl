@@ -82,8 +82,13 @@ LTA.savefig_auto(fig4, "outputs/" * sim_no * "/results/plots/transition_matrices
 fig5 = LTA.plot_initial_probs(best_model_params.beta_initial, range)
 LTA.savefig_auto(fig5, "outputs/" * sim_no * "/results/plots/initial_probs_covs.png")
 
-# Ensemble-based uncertainty quantification 
-fig = LTA.ensemble_uq_monthly_return_traces(estimation_output; T=5, symptom_names=symptoms_list_ordinal, observation_type="ordinal")
+# Ensemble-based uncertainty quantification
+# the ensemble is computed once, saved (reused by evaluations/compare_transition_uncertainty.jl) and passed on
+kept_params = LTA.get_ensemble_params(estimation_output; T=5, select_function=LTA.select_params_with_missingness)
+save("outputs/" * sim_no * "/results/estimates/kept_params_select_params_with_missingness.jld2", "kept_params", kept_params)
+
+fig = LTA.ensemble_uq_monthly_return_traces(estimation_output; T=5, symptom_names=symptoms_list_ordinal,
+    observation_type="ordinal", kept_params=kept_params)
 LTA.savefig_auto(fig, "outputs/" * sim_no * "/results/plots/ensemble_uq_ordinal.png")
 
 fig = LTA.estimated_states_over_time(estimation_output; T=5, type="best_fitted", n_states=n_states)

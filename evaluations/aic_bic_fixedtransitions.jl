@@ -5,7 +5,7 @@ using PlotlyJS
 
 
 n_state_list = collect(3:3)
-sim_no_list = string.(n_state_list) .* "states/age_sex_comorbidity_covs_fups_all_symptoms_all_steps"
+sim_no_list = string.(n_state_list) .* "states/test"
 
 sim_dir = "outputs/2026_07_20/"
 save_dr_list = sim_dir .* sim_no_list .* "/results/estimates"
@@ -25,25 +25,31 @@ function get_likelihood(est_output::LTA.EstimationOutput)
 
 end
 
+# number of free parameters = length of the parameter vector the optimiser works on
+# (fitted_model_params holds NamedTuples, whose length would only count their fields)
+n_params(est_output::LTA.EstimationOutput) =
+    length(LTA.model_params_2_param_vec(est_output.fitted_model_params[1]))
+
+# fitted_log_lkl_list holds the negative log-likelihood (NLL) of each start
 function get_AIC(est_output::LTA.EstimationOutput)
 
-    k = length(est_output.fitted_model_params[1])
-    aic = 2 * k + 2 * maximum(est_output.fitted_log_lkl_list)
+    k = n_params(est_output)
+    aic = 2 * k + 2 * minimum(est_output.fitted_log_lkl_list)
 
     return aic
 end
 
 function get_AIC_fixed(est_output::LTA.EstimationOutput)
     lkl, zeros = get_likelihood(est_output)
-    k = length(est_output.fitted_model_params[1])
+    k = n_params(est_output)
     aic = 2 * k + 2 * lkl
 end
 
 function get_BIC(est_output::LTA.EstimationOutput)
 
-    k = length(est_output.fitted_model_params[1])
+    k = n_params(est_output)
     N = est_output.sim_output.sim_params.sim_hyper.N
-    bic = k * log(N) + minimum(est_output.fitted_log_lkl_list)
+    bic = k * log(N) + 2 * minimum(est_output.fitted_log_lkl_list)
 
     return bic
 end
