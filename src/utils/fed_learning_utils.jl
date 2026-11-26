@@ -2,7 +2,7 @@
 using ForwardDiff
 include("../../digihero_params.jl")
 
-function grad_one_step(current_parameters, aggr_grad, sim_output::SimulationOutput; lambda = 0.0)
+function grad_one_step(current_parameters, aggr_grad, sim_output::SimulationOutput; lambda=0.0)
 
     function stable_grad_vec!(G, x)
         G .= aggr_grad
@@ -10,24 +10,20 @@ function grad_one_step(current_parameters, aggr_grad, sim_output::SimulationOutp
 
     # define the likelihood function
     obj_func = params_vec -> objective_func(
-		params_vec,
-
-		sim_output = sim_output,
-		lambda = lambda
+        params_vec, sim_output=sim_output,
+		lambda=lambda
     )
     next_grad = ForwardDiff.gradient(obj_func, current_parameters)
 
     return next_grad
 end
 
-function get_lkl_val(current_parameters, sim_output::SimulationOutput; lambda = 0.0)
+function get_lkl_val(current_parameters, sim_output::SimulationOutput; lambda=0.0)
 
     # define the likelihood function
     obj_func = params_vec -> objective_func(
-		params_vec,
-
-		sim_output = sim_output,
-		lambda = lambda
+        params_vec, sim_output=sim_output,
+		lambda=lambda
     )
     likelihood = obj_func(current_parameters)
 
@@ -39,14 +35,14 @@ function create_LTS_sim_hyper(;
     kwargs...
 )
     sim_hyper = SimHyperParams(
-		param_seed = 1, 
-		N = kwargs[:N],
-        n_obs_tup = kwargs[:n_obs_tup],
-		n_states = kwargs[:n_states],
-        ref_state = 1, 
-		covariate_tup = kwargs[:covariate_tup],
-		sim_no = kwargs[:sim_no],
-		comments = kwargs[:comments]
+		param_seed=1, 
+		N=kwargs[:N],
+        n_obs_tup=kwargs[:n_obs_tup],
+		n_states=kwargs[:n_states],
+        ref_state=1, 
+		covariate_tup=kwargs[:covariate_tup],
+		sim_no=kwargs[:sim_no],
+		comments=kwargs[:comments]
     )
     return sim_hyper
 end
@@ -198,12 +194,12 @@ function preprocess(df::DataFrame;
         Ttype=Float64)
 
     # Covariates → matrix
-    pat_cov  = build_covariates(df, covariates)
+    pat_cov = build_covariates(df, covariates)
 
     observations = NamedTuple()
-    isempty(binary_syms) || (observations = (; observations..., bernoulli_observations = bernoulli_observations))
-    isempty(ordinal_syms) || (observations = (; observations..., ordinal_observations = ordinal_observations))
-    isempty(cont_syms) || (observations = (; observations..., gaussian_observations = gaussian_observations))
+    isempty(binary_syms) || (observations = (; observations..., bernoulli_observations=bernoulli_observations))
+    isempty(ordinal_syms) || (observations = (; observations..., ordinal_observations=ordinal_observations))
+    isempty(cont_syms) || (observations = (; observations..., gaussian_observations=gaussian_observations))
 
     return observations, pat_cov
 
@@ -246,59 +242,56 @@ function create_data_sim_params(
     if haskey(observations, :bernoulli_observations)
         bernoulli_observations = observations.bernoulli_observations[.!mask, :, :]
         N, T, symp = size(bernoulli_observations)
-        n_obs_tup = (; n_obs_tup..., bernoulli = symp)
-        masked_observations = (; masked_observations..., bernoulli_observations = bernoulli_observations)
+        n_obs_tup = (; n_obs_tup..., bernoulli=symp)
+        masked_observations = (; masked_observations..., bernoulli_observations=bernoulli_observations)
         N = size(bernoulli_observations, 1)
     end
     if haskey(observations, :ordinal_observations)
         ordinal_observations = observations.ordinal_observations[.!mask, :, :]
         N, T, symp = size(ordinal_observations)
-        n_obs_tup = (; n_obs_tup..., ordinal = symp, ordinal_categories = maximum(ordinal_observations)+1)
-        masked_observations = (; masked_observations..., ordinal_observations = ordinal_observations)
+        n_obs_tup = (; n_obs_tup..., ordinal=symp, ordinal_categories=maximum(ordinal_observations)+1)
+        masked_observations = (; masked_observations..., ordinal_observations=ordinal_observations)
     end
     if haskey(observations, :gaussian_observations)
         gaussian_observations = observations.gaussian_observations[.!mask, :, :]
 
         N, T, symp = size(gaussian_observations)
-        n_obs_tup = (; n_obs_tup..., gaussian = symp)
-        masked_observations = (; masked_observations..., gaussian_observations = gaussian_observations)
+        n_obs_tup = (; n_obs_tup..., gaussian=symp)
+        masked_observations = (; masked_observations..., gaussian_observations=gaussian_observations)
     end
 	covariate_df = covariate_df[.!mask, :]
     covariate_mat = Matrix{Float64}(covariate_df)
 
     sim_hyper = create_LTS_sim_hyper(;
-		N = N,
-        n_obs_tup = n_obs_tup,
-        n_states = kwargs[:n_states],
-        ref_state = 1,
-        covariate_tup = kwargs[:covariate_tup],
+		N=N,
+        n_obs_tup=n_obs_tup,
+        n_states=kwargs[:n_states],
+        ref_state=1,
+        covariate_tup=kwargs[:covariate_tup],
         kwargs...
     )
 
     model_params = gen_model_params(;
-		seed = sim_hyper.param_seed, 
-		n_states = sim_hyper.n_states, 
-		covariate_tup = sim_hyper.covariate_tup, 
-		n_obs_tup = sim_hyper.n_obs_tup, 
-		ref_state = sim_hyper.ref_state,
+		seed=sim_hyper.param_seed, 
+		n_states=sim_hyper.n_states, 
+		covariate_tup=sim_hyper.covariate_tup, 
+		n_obs_tup=sim_hyper.n_obs_tup, 
+		ref_state=sim_hyper.ref_state,
     )
 
     sim_params = SimParams(
-		sim_hyper = sim_hyper,
+		sim_hyper=sim_hyper,
 
         # obtained from simulation params
-		covariate_mat_headers = names(covariate_df),
-		covariate_mat = covariate_mat, 
-		
-		model_params = model_params
+		covariate_mat_headers=names(covariate_df),
+        covariate_mat=covariate_mat, model_params=model_params
     )
 
     sim_output = SimulationOutput(
-		sim_params = sim_params,
-		simulation_seed = 1, # doesnt matter
-		
-		states = zeros(N, T),
-		observations = masked_observations
+		sim_params=sim_params,
+		simulation_seed=1, # doesnt matter
+				states=zeros(N, T),
+		observations=masked_observations
     )
 
     return sim_output
@@ -312,12 +305,12 @@ function create_sim_mod_data(
     df = DataFrame(tab)
 
     observations, covariate_df = preprocess(df;
-        covariates      = kwargs[:covs],
-        binary_syms     = kwargs[:bins],
-        ordinal_syms = kwargs[:ordinals],
-        cont_syms       = kwargs[:conts],
-        visit_prefixes  = kwargs[:visits],
-        time_labels     = kwargs[:labels],
+        covariates=kwargs[:covs],
+        binary_syms=kwargs[:bins],
+        ordinal_syms=kwargs[:ordinals],
+        cont_syms=kwargs[:conts],
+        visit_prefixes=kwargs[:visits],
+        time_labels=kwargs[:labels],
     )
 
     sim_output = create_data_sim_params(
@@ -336,9 +329,9 @@ function create_ds_simulation_from_sim_params(
 
     sim_output = run_simulation(
         sim_params;
-        T = kwargs[:T],
-        simulation_seed = kwargs[:simulation_seed],
-        percentage_observations_missing = kwargs[:percentage_observations_missing],
+        T=kwargs[:T],
+        simulation_seed=kwargs[:simulation_seed],
+        percentage_observations_missing=kwargs[:percentage_observations_missing],
     )
 
     bernoulli_observations = sim_output.observations.bernoulli_observations
@@ -375,4 +368,38 @@ function create_ds_simulation_from_sim_params(
     insertcols!(output_df, 1, :ID => collect(1:nrow(output_df)))
 
     return sim_output, output_df
+end
+
+
+function get_initial_probs(est_output::LTA.EstimationOutput, sim_params::LTA.SimParams)
+
+    best_model_params = LTA.get_model_params(est_output, type="best_fitted")
+
+    unique_mat = unique(sim_params.covariate_mat, dims=1)
+    initial_probs = [
+        LTA.get_rho_beta_initial_states(
+            best_model_params.beta_initial,
+            best_model_params.rho_initial,
+            unique_mat[i, :]
+        ) for i in 1:size(unique_mat, 1)
+    ]
+    df = DataFrame(unique_mat, sim_params.covariate_mat_headers)
+    return df, initial_probs
+end
+
+
+function get_transition_matrices(est_output::LTA.EstimationOutput, sim_params::LTA.SimParams)
+
+    best_model_params = LTA.get_model_params(est_output, type="best_fitted")
+
+    unique_mat = unique(sim_params.covariate_mat, dims=1)
+    transition_matrices = [
+        LTA.get_rho_beta_transition_mat(
+            best_model_params.beta_transition,
+            best_model_params.rho_trans,
+            unique_mat[i, :]
+        ) for i in 1:size(unique_mat, 1)
+    ]
+    df = DataFrame(unique_mat, sim_params.covariate_mat_headers)
+    return df, transition_matrices
 end
