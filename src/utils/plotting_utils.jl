@@ -1275,7 +1275,7 @@ function plot_ordinal_median_and_CI(
         row = div(s - 1, ncols) + 1
         col = mod(s - 1, ncols) + 1
 
-        for j in 1:J
+        for j in 2:J
             r, g, b = palette[mod1(j, length(palette))]
             group = "cat$j"
 
@@ -1329,8 +1329,7 @@ function plot_ordinal_median_and_CI(
         relayout!(plt;
             Symbol("yaxis$(s)") => attr(
                 title=col == 1 ? "Percentage Frequency" : "",
-                titlefont=attr(size=14),
-                range=[0, 1]
+                titlefont=attr(size=14)
             ),
             Symbol("xaxis$(s)") => attr(
                 title=(row == nrows ? "time" : ""),
@@ -1560,7 +1559,7 @@ function ensemble_uq_fup(
                 estimated_props = get_ordinal_proportions(estimated_sim_output.observations.ordinal_observations, J)
                 true_props = get_ordinal_proportions(est_output.sim_output.observations.ordinal_observations, J)
                 create_ordinal_proportion_plot_fup(estimated_props, true_props;
-                symptom_names=symptom_names, category_labels=category_labels)
+                    symptom_names=symptom_names, category_labels=category_labels)
             elseif observation_type == "gaussian"
                 # per-time means (one subplot per symptom)
                 est_gauss = estimated_sim_output.observations.gaussian_observations
@@ -1628,7 +1627,7 @@ function ensemble_uq_monthly_stats(
                 estimated_props = get_ordinal_proportions(estimated_sim_output.observations.ordinal_observations, J)
                 true_props = get_ordinal_proportions(est_output.sim_output.observations.ordinal_observations, J)
                 create_ordinal_proportion_plot_fup(estimated_props, true_props;
-                symptom_names=symptom_names, category_labels=category_labels)
+                    symptom_names=symptom_names, category_labels=category_labels)
             elseif observation_type == "gaussian"
                 # per-time means (one subplot per symptom)
                 est_gauss = estimated_sim_output.observations.gaussian_observations
@@ -1825,13 +1824,13 @@ function ensemble_uq_monthly_startingparams(
                 estimated_props = get_binary_proportions(estimated_sim_output.observations.bernoulli_observations)
                 true_props = get_binary_proportions(est_output.sim_output.observations.bernoulli_observations)
                 create_bernoulli_proportion_plot_monthly(estimated_props, true_props; symptom_names=symptom_names)
-            
+
             elseif observation_type == "ordinal"
                 J = est_output.sim_output.sim_params.sim_hyper.n_obs_tup.ordinal_categories
                 estimated_props = get_ordinal_proportions(estimated_sim_output.observations.ordinal_observations, J)
                 true_props = get_ordinal_proportions(est_output.sim_output.observations.ordinal_observations, J)
                 create_ordinal_proportion_plot_fup(estimated_props, true_props;
-                symptom_names=symptom_names, category_labels=category_labels)
+                    symptom_names=symptom_names, category_labels=category_labels)
 
             elseif observation_type == "gaussian"
                 # per-time means (one subplot per symptom)
@@ -2010,40 +2009,91 @@ function savefig_auto(fig, path; kwargs...)
     PlotlyJS.savefig(fig, path; width=w, height=h, kwargs...)
 end
 
+
 function plot_ordinal_heatmaps(
     model_params::NamedTuple;
     ordinal_labels=nothing,
-    category_labels=nothing
+    category_labels=nothing,
+    state_labels=nothing,
+    levels=nothing,                       # default: skip category 1 (= 1 - sum of the others)
+    level_colors=["#E08A00", "#B71C1C"]   # one colour per plotted level
 )
-    # one panel per ordinal symptom: states × categories, rows sum to 1
     ord_probs = get_ordinal_probs(model_params.emissions.beta_ordinal)   # S × M × J
-    M, J = size(ord_probs, 2), size(ord_probs, 3)
-    ordinal_labels = isnothing(ordinal_labels) ? ["Ordinal $m" for m in 1:M] : ordinal_labels
-    category_labels = isnothing(category_labels) ? string.(0:(J-1)) : category_labels
+    S, M, J = size(ord_probs)
+    ordinal_labels = isnothing(ordinal_labels) ? ["Ordinal $m" for m in 1:M] : string.(ordinal_labels)
+    category_labels = isnothing(category_labels) ? string.(0:(J-1)) : string.(category_labels)
+    state_labels = isnothing(state_labels) ? ["S$s" for s in 1:S] : string.(state_labels)
+    levels = isnothing(levels) ? collect(2:J) : levels
+    L = length(levels)
 
-    # grid layout like the proportion plots, titles filled row by row and padded for empty panels
-    ncols = min(M, 3)
-    nrows = cld(M, ncols)
-    titles = vcat(string.(ordinal_labels), fill("", nrows * ncols - M))
-    titles = permutedims(reshape(titles, ncols, nrows))
+    fig = PlotlyJS.make_subplots(
+        rows=L, cols=1,
+        subplot_titles=reshape(category_labels[levels], L, 1),
+        shared_xaxes=true,
+        vertical_spacing=0.06
+    )
+
+    for (i, j) in enumerate(levels)
+        color = level_colors[i]
+        tr = PlotlyJS.heatmap(
+            z=ord_probs[:, :, j]',                  # M × S: symptoms on y, states on x
+            x=state_labels,
+            y=ordinal_labels,
+            colorscale=[[0, "white"], [1, color]],
+            zmin=0, zmax=1,
+            colorbar=attr(len=0.8 / L, y=1 - (i - 0.5) / L, yanchor="middle",
+                thickness=15)
+        )
+        add_trace!(fig, tr, row=i, col=1)
+        relayout!(fig; Symbol("yaxis$(i)_autorange") => "reversed")   # first symptom on top
+    end
+
+    relayout!(fig, width=1000, height=150 + 300 * L)
+    return fig
+end
+
+
+function plot_transition_matrices(covariates::DataFrame,
+    transition_matrices::Vector{Matrix{Float64}})
+    n_matrices = length(transition_matrices)
+    ncols = min(n_matrices, 4)
+    nrows = cld(n_matrices, ncols)
+    covariate_names = names(covariates)
+    baseline = ["male", "18-34", "no comorbidity"]
+
+    idx_of(candidates) = findall(in(candidates), covariate_names)
+
+    age_cols = idx_of(["35-59", "60-79", "80+"])
+    comorbidity_cols = idx_of(["comorbidity"])
+    sex_cols = idx_of(["female"])
+
+    groups = ((sex_cols, baseline[1]),
+        (age_cols, baseline[2]),
+        (comorbidity_cols, baseline[3]))
+
+    titles = map(1:n_matrices) do i
+        values = covariates[i, :]
+        parts = String[]
+        for (cols, baseline_label) in groups
+            active = [covariate_names[j] for j in cols if isequal(values[j], 1)]
+            push!(parts, isempty(active) ? baseline_label : join(active, " + "))
+        end
+        join(parts, ", ")
+    end
+    titles_mat = permutedims(reshape(titles, ncols, nrows))
 
     fig = PlotlyJS.make_subplots(
         rows=nrows, cols=ncols,
-        subplot_titles=titles,
-        horizontal_spacing=0.03,
-        vertical_spacing=min(0.08, 0.3 / nrows)
+        subplot_titles=titles_mat,
+        vertical_spacing=0.07    # gap between rows
     )
-    for m in 1:M
-        row = div(m - 1, ncols) + 1
-        col = mod(m - 1, ncols) + 1
-        tr = plot_single_bernoulli_probs(ord_probs[:, m, :]; symptom_labels=category_labels)
-        tr[:showscale] = (m == M)              # one shared colour bar on the right
+    for i in 1:n_matrices
+        row = div(i - 1, ncols) + 1
+        col = mod(i - 1, ncols) + 1
+        tr = plot_single_transition_mat(transition_matrices[i])
+        tr[:showscale] = (i == n_matrices)              # one shared colour bar on the right
         add_trace!(fig, tr, row=row, col=col)
-        if col > 1                             # state labels only in the first column
-            relayout!(fig; Symbol("yaxis$(m)_showticklabels") => false)
-        end
     end
     relayout!(fig, width=150 + 600 * ncols, height=100 + 300 * nrows)
-
     return fig
 end
