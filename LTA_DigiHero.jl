@@ -11,19 +11,7 @@ using Plots
 
 sim_dir = "data/DigiHero/"
 n_states = 3
-sim_no = string("2026_07_20/", n_states, "states/age_sex_comorbidity_covs_fups_ordinal_predictioncheck")
-combined_all_train = CSV.read(sim_dir * "2026-07-20_data_symptoms_DigiHero_Bonn_preprocessed_ordinal_train.csv", DataFrame, missingstring=["", "NA"]);
-
-println("Running simulation with ", sim_no)
-
-pattern = Regex(join(vcat(symptoms_list_binary, symptoms_list_ordinal, covariates_list_new_agegroups), "|"))
-preprocessed_df = select(combined_all_train, names(combined_all_train, pattern))
-preprocessed_df = preprocessed_df[:, 3:end]
-
-preprocessed_df = filter(row -> !all(ismissing, row[Not(covariates_list_new_agegroups)]), preprocessed_df)
-
-train_sim_output = LTA.create_sim_mod_data(preprocessed_df; covs=covariates_list_new_agegroups, bins=String[], ordinals=symptoms_list_ordinal, conts=String[], visits=String[], labels=["pcc_" * string(timepoints) * "months_sym_" for timepoints in collect(6:6:30)], n_states=n_states, covariate_tup=(initial=covariates_list_new_agegroups, trans=covariates_list_new_agegroups, em=[]), sim_no=sim_no, comments="")
-
+sim_no = string("2026_07_20/", n_states, "states/age_sex_comorbidity_covs_fups_ordinal")
 
 combined_all = CSV.read(sim_dir * "2026-07-20_data_symptoms_DigiHero_Bonn_preprocessed_ordinal.csv", DataFrame, missingstring=["", "NA"]);
 
