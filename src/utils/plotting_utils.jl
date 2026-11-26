@@ -1703,14 +1703,50 @@ function select_params(model_params,
     return kept_params
 end
 
+# Same as select_params, but the simulated data get the missingness pattern of the observed
+# data (-1 where the observed data are missing). Otherwise the simulated data are complete,
+# their NLL is always larger than the NLL of the observed data, and every parameter set is kept.
+function select_params_with_missingness(model_params,
+    est_output::EstimationOutput;
+    T::Integer=5)
+    observed = est_output.sim_output.observations
+    kept_params = []
+    for multistart in 1:length(model_params)
+        for params in model_params[multistart]
+            x = 0
+            lkl_obs = lkl_func(; model_params=params, sim_output=est_output.sim_output)
+            for seed in 1:10
+                sim = run_simulation_from_model_params(
+                    est_output;
+                    simulation_seed=seed,
+                    T=T,
+                    model_params=params
+                )
+                masked_observations = (; (key => ifelse.(observed[key] .== -1, -1, sim.observations[key])
+                                          for key in keys(sim.observations))...)
+                masked_sim = SimulationOutput(sim_params=sim.sim_params, simulation_seed=seed,
+                    states=sim.states, observations=masked_observations)
+                lkl = lkl_func(; model_params=params, sim_output=masked_sim)
+                if lkl > lkl_obs
+                    x += 1
+                end
+            end
+            p = (1 + x) / 11
+            if p > 0.05
+                push!(kept_params, params)
+            end
+        end
+    end
+    return kept_params
+end
 
-function ensemble_uq_monthly_return_traces(
+# Ensemble for the uncertainty quantification: all parameter sets along the optimiser paths
+# of all starts that pass select_function. This is the expensive part, so compute it once and
+# pass it as kept_params to ensemble_uq_monthly_return_traces and ensemble_uq_transition_stats.
+function get_ensemble_params(
     est_output::EstimationOutput;
     T::Integer=5,
-    observation_type::AbstractString="bernoulli",
-    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
-    category_labels::Union{Nothing,Vector{<:AbstractString}}=nothing,
-    quantile::Float64=0.05
+    select_function=select_params   # or select_params_with_missingness
 )
     all_params = est_output.all_model_params
     n_starts = length(all_params)
@@ -1724,16 +1760,34 @@ function ensemble_uq_monthly_return_traces(
 
     kept_params_list = []
     kept_params_tasks = map(start_chunks_idx) do chunk_idx
-        Threads.@spawn select_params(all_params[chunk_idx], est_output; T=T)
+        Threads.@spawn select_function(all_params[chunk_idx], est_output; T=T)
     end
     kept_params = fetch.(kept_params_tasks)
 
-    idx = 1
     for i in kept_params
         for j in i
             push!(kept_params_list, j)
         end
     end
+    println("Ensemble UQ (", select_function, "): kept ", length(kept_params_list), " of ",
+        sum(length.(all_params)), " parameter sets")
+
+    return kept_params_list
+end
+
+
+function ensemble_uq_monthly_return_traces(
+    est_output::EstimationOutput;
+    T::Integer=5,
+    observation_type::AbstractString="bernoulli",
+    symptom_names::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    category_labels::Union{Nothing,Vector{<:AbstractString}}=nothing,
+    quantile::Float64=0.05,
+    select_function=select_params,   # or select_params_with_missingness
+    kept_params=nothing              # output of get_ensemble_params; skips the selection
+)
+    kept_params_list = isnothing(kept_params) ?
+                       get_ensemble_params(est_output; T=T, select_function=select_function) : kept_params
 
     # ordinal: J lines per symptom, so work on the S × T × J proportions directly
     if observation_type == "ordinal"
@@ -2053,11 +2107,8 @@ function plot_ordinal_heatmaps(
 end
 
 
-function plot_transition_matrices(covariates::DataFrame,
-    transition_matrices::Vector{Matrix{Float64}})
-    n_matrices = length(transition_matrices)
-    ncols = min(n_matrices, 4)
-    nrows = cld(n_matrices, ncols)
+# one title per covariate combination (row of covariates), e.g. "female, 35-59, no comorbidity"
+function covariate_profile_titles(covariates::DataFrame)
     covariate_names = names(covariates)
     baseline = ["male", "18-34", "no comorbidity"]
 
@@ -2071,7 +2122,7 @@ function plot_transition_matrices(covariates::DataFrame,
         (age_cols, baseline[2]),
         (comorbidity_cols, baseline[3]))
 
-    titles = map(1:n_matrices) do i
+    return map(1:nrow(covariates)) do i
         values = covariates[i, :]
         parts = String[]
         for (cols, baseline_label) in groups
@@ -2080,7 +2131,14 @@ function plot_transition_matrices(covariates::DataFrame,
         end
         join(parts, ", ")
     end
-    titles_mat = permutedims(reshape(titles, ncols, nrows))
+end
+
+function plot_transition_matrices(covariates::DataFrame,
+    transition_matrices::Vector{Matrix{Float64}})
+    n_matrices = length(transition_matrices)
+    ncols = min(n_matrices, 4)
+    nrows = cld(n_matrices, ncols)
+    titles_mat = permutedims(reshape(covariate_profile_titles(covariates), ncols, nrows))
 
     fig = PlotlyJS.make_subplots(
         rows=nrows, cols=ncols,
@@ -2096,4 +2154,104 @@ function plot_transition_matrices(covariates::DataFrame,
     end
     relayout!(fig, width=150 + 600 * ncols, height=100 + 300 * nrows)
     return fig
+end
+
+# ---------- ensemble UQ for the transition matrices ----------
+
+# Wasserstein distance between two states, summed over symptoms (as in clustering_ordinal.py).
+# p, q: L × J category probabilities. For categories 0..J-1 the Wasserstein distance of one
+# symptom is sum_k |P(X ≥ k) - Q(X ≥ k)|, k = 1..J-1 (the same as scipy.stats.wasserstein_distance).
+function wasserstein_distance(p, q)
+    p_geq = reverse(cumsum(reverse(p, dims=2), dims=2), dims=2)[:, 2:end]
+    q_geq = reverse(cumsum(reverse(q, dims=2), dims=2), dims=2)[:, 2:end]
+    return sum(abs.(p_geq .- q_geq))
+end
+
+# category probabilities per state (S × L × J), one array per observation type;
+# binary symptoms as two categories 0/1
+function state_category_probs(model_params::NamedTuple)
+    probs = Array{Float64,3}[]
+    if haskey(model_params.emissions, :beta_bernoulli)
+        p1 = get_bernoulli_probs(model_params.emissions.beta_bernoulli, Float64[])   # S × L, P(X = 1)
+        push!(probs, cat(1 .- p1, p1, dims=3))
+    end
+    if haskey(model_params.emissions, :beta_ordinal)
+        push!(probs, get_ordinal_probs(model_params.emissions.beta_ordinal))
+    end
+    return probs
+end
+
+# One-to-one matching from a distance matrix cost[i, j] (reference state i, other state j).
+# perm[i] = state matched to reference state i: closest pairs first, then swap pairs
+# as long as that lowers the total distance.
+function match_states(cost::Matrix{Float64})
+    S = size(cost, 1)
+    perm = zeros(Int, S)
+    for ij in sort(vec(CartesianIndices(cost)), by=ij -> cost[ij])
+        i, j = Tuple(ij)
+        perm[i] == 0 && !(j in perm) && (perm[i] = j)
+    end
+    improved = true
+    while improved
+        improved = false
+        for a in 1:S-1, b in a+1:S
+            if cost[a, perm[b]] + cost[b, perm[a]] < cost[a, perm[a]] + cost[b, perm[b]]
+                perm[a], perm[b] = perm[b], perm[a]
+                improved = true
+            end
+        end
+    end
+    return perm
+end
+
+# match the states of model_params to those of reference_params (same model) via the Wasserstein distance
+function match_states_to_reference(model_params::NamedTuple, reference_params::NamedTuple)
+    P = state_category_probs(model_params)
+    R = state_category_probs(reference_params)
+    S = size(R[1], 1)
+    cost = [sum(wasserstein_distance(R[o][i, :, :], P[o][j, :, :]) for o in eachindex(R)) for i in 1:S, j in 1:S]
+    return match_states(cost)
+end
+
+# Transition matrices (from × to) of the ensemble for the same covariate combinations as
+# get_transition_matrices; every parameter set uses its own rho on the covariates.
+# Every field is one S × S matrix per covariate combination (row of covariates).
+function ensemble_uq_transition_stats(
+    est_output::EstimationOutput;
+    T::Integer=5,
+    quantile::Float64=0.05,
+    select_function=select_params,   # or select_params_with_missingness
+    kept_params=nothing              # output of get_ensemble_params; skips the selection
+)
+    kept_params_list = isnothing(kept_params) ?
+                       get_ensemble_params(est_output; T=T, select_function=select_function) : kept_params
+    sim_output, sim_params, sim_hyper = unpack(est_output)
+
+    covariate_idx = convert_covariate_2_df_indices(sim_params.covariate_mat_headers, sim_hyper.covariate_tup)
+    unique_mat = unique(sim_params.covariate_mat, dims=1)
+    n_profiles = size(unique_mat, 1)
+    profile_transitions(params) = [get_rho_beta_transition_mat(params.beta_transition, params.rho_trans,
+        unique_mat[c, covariate_idx[:trans]]) for c in 1:n_profiles]
+
+    # states are numbered differently in every start: match each kept parameter set to the best fit
+    best_params = get_model_params(est_output, type="best_fitted")
+    ensemble = map(kept_params_list) do params
+        perm = match_states_to_reference(params, best_params)
+        [m[perm, perm] for m in profile_transitions(params)]
+    end
+
+    best = profile_transitions(best_params)
+    S = size(best[1], 1)
+    entries(c, i, j) = [e[c][i, j] for e in ensemble]
+    summarise(f) = [[f(entries(c, i, j)) for i in 1:S, j in 1:S] for c in 1:n_profiles]
+    lower = summarise(v -> Statistics.quantile(v, quantile / 2))
+    upper = summarise(v -> Statistics.quantile(v, 1 - quantile / 2))
+
+    return (covariates=DataFrame(unique_mat, sim_params.covariate_mat_headers),
+        best=best,
+        median=summarise(median),
+        lower=lower,
+        upper=upper,
+        width=upper .- lower,
+        n_kept=length(kept_params_list))
 end
