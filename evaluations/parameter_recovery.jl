@@ -91,21 +91,26 @@ println("matched distances: ", [cost[i, perm[i]] for i in 1:n_states])
 X = sim_params.covariate_mat
 cidx = LTA.convert_covariate_2_df_indices(sim_params.covariate_mat_headers, sim_hyper.covariate_tup)
 
-# probabilities averaged over the patients' covariates
-mean_initial(mp) = mean(LTA.get_rho_beta_initial_states(mp.beta_initial, mp.rho_initial, X[n, cidx.initial]) for n in axes(X, 1))
-mean_transition(mp) = mean(LTA.get_rho_beta_transition_mat(mp.beta_transition, mp.rho_trans, X[n, cidx.trans]) for n in axes(X, 1))
+# initial and transition probabilities per covariate combination (as in get_transition_matrices)
+profiles = unique(X, dims=1)
+profile_titles = LTA.covariate_profile_titles(DataFrame(profiles, sim_params.covariate_mat_headers))
+initial_probs(mp, x) = LTA.get_rho_beta_initial_states(mp.beta_initial, mp.rho_initial, x[cidx.initial])
+transition_probs(mp, x) = LTA.get_rho_beta_transition_mat(mp.beta_transition, mp.rho_trans, x[cidx.trans])
 
 ord_true = LTA.convert_ordinal_2_true(true_params.emissions.beta_ordinal)
 ord_est = LTA.convert_ordinal_2_true(est_params.emissions.beta_ordinal)
 
-comparison = [
-    ("initial probability", mean_initial(true_params), mean_initial(est_params)[perm]),
-    ("transition probability", mean_transition(true_params), mean_transition(est_params)[perm, perm]),
-    ("emission probability", P_true, P_est[perm, :, :]),
-    ("eta (state effect)", ord_true.beta, ord_est.beta[perm, :, :]),
-    ("tau (cutpoint)", ord_true.alpha[2:end, :], ord_est.alpha[2:end, :]),   # tau_1 = 0 is fixed
+# (group, covariate combination, true, estimate); "" = does not depend on the covariates
+comparison = Any[
+    ("emission probability", "", P_true, P_est[perm, :, :]),
+    ("eta (state effect)", "", ord_true.beta, ord_est.beta[perm, :, :]),
+    ("tau (cutpoint)", "", ord_true.alpha[2:end, :], ord_est.alpha[2:end, :]),   # tau_1 = 0 is fixed
 ]
-rows = reduce(vcat, [DataFrame(group=g, true_value=vec(t), estimate=vec(e)) for (g, t, e) in comparison])
+for (c, x) in enumerate(eachrow(profiles))
+    push!(comparison, ("initial probability", profile_titles[c], initial_probs(true_params, x), initial_probs(est_params, x)[perm]))
+    push!(comparison, ("transition probability", profile_titles[c], transition_probs(true_params, x), transition_probs(est_params, x)[perm, perm]))
+end
+rows = reduce(vcat, [DataFrame(group=g, covariates=cov, true_value=vec(t), estimate=vec(e)) for (g, cov, t, e) in comparison])
 CSV.write(rec_dir * "/results/recovery_parameters.csv", rows)
 
 errors = combine(groupby(rows, :group),
