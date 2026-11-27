@@ -1682,7 +1682,7 @@ function select_params(model_params,
         for params in model_params[multistart]
             x = 0
             lkl_obs = lkl_func(; model_params=params, sim_output=est_output.sim_output)
-            for seed in 1:10
+            for seed in 1:100
                 estimated_sim_output = run_simulation_from_model_params(
                     est_output;
                     simulation_seed=seed,
@@ -1694,7 +1694,7 @@ function select_params(model_params,
                     x += 1
                 end
             end
-            p = (1 + x) / 11
+            p = (1 + x) / 101
             if p > 0.05
                 push!(kept_params, params)
             end
