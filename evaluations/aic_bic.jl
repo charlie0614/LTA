@@ -4,8 +4,8 @@ using JLD2
 using PlotlyJS
 
 
-n_state_list = collect(3:9)
-sim_no_list = string.(n_state_list) .* "states/age_sex_comorbidity_covs_fups"
+n_state_list = collect(3:10)
+sim_no_list = string.(n_state_list) .* "states/age_sex_comorbidity_covs_fups_ordinal"
 
 sim_dir = "outputs/2026_07_20/"
 save_dr_list = sim_dir .* sim_no_list .* "/results/estimates"
@@ -81,4 +81,4 @@ aic_bic_plt = plot_aic_bic(
     labels=["$i States" for i in n_state_list]
 )
 
-PlotlyJS.savefig(aic_bic_plt, sim_dir * "aic_bic_age_sex_comorbidity_covs_fups.png", width=1200, height=800)
+PlotlyJS.savefig(aic_bic_plt, sim_dir * "aic_bic_age_sex_comorbidity_covs_fups_ordinal.png", width=1200, height=800)
